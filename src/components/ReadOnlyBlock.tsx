@@ -3,11 +3,14 @@
 // content, with a navigable link for `subpage` blocks (pointing to
 // /share/:token?p=pageId).
 
-import React, { useState } from 'react';
-import katex from 'katex';
+import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Block } from '../types';
 import { DocumentIcon, ArrowUpRightIcon, PaperclipIcon, CopyIcon, CheckIcon } from './Icons';
+import { ImageLightbox } from './ImageLightbox';
+import { useLanguage } from '../i18n/LanguageContext';
 import { inlineMarkdownToHtml, plainTextToSafeHtml } from './inlineMarkdown';
+import { useKatexHtml } from '../utils/katexLoader';
 
 interface Props {
   block: Block;
@@ -19,22 +22,41 @@ interface Props {
 // where links/bold/italic/inline code make sense (headings, paragraph, quote,
 // callout, lists). For code/todo we skip inline markdown because it would
 // break semantics (a link inside a checkbox? no).
-const renderRich = (text: string) => ({ __html: inlineMarkdownToHtml(text) });
 const renderPlain = (text: string) => ({ __html: plainTextToSafeHtml(text) });
 
 export function ReadOnlyBlock({ block, shareToken }: Props) {
+  const navigate = useNavigate();
+
+  // Links to other pages (`/page/<id>`) are editor routes behind the login, so
+  // inside a share they point at the same share's page instead. SharedView
+  // falls back to the share root for pages that aren't part of it.
+  const rich = (text: string) => ({
+    dangerouslySetInnerHTML: {
+      __html: inlineMarkdownToHtml(text, {
+        pageHref: (pageId) => `/share/${encodeURIComponent(shareToken)}?p=${encodeURIComponent(pageId)}`,
+      }),
+    },
+    onClick: (e: React.MouseEvent) => {
+      const link = (e.target as HTMLElement).closest('a.inline-link--page') as HTMLAnchorElement | null;
+      // Let modified clicks (new tab, etc.) behave natively.
+      if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      navigate(link.getAttribute('href') || '/');
+    },
+  });
+
   switch (block.type) {
     case 'heading1':
-      return <h1 className="readonly-block readonly-h1" dangerouslySetInnerHTML={renderRich(block.content)} />;
+      return <h1 className="readonly-block readonly-h1" {...rich(block.content)} />;
     case 'heading2':
-      return <h2 className="readonly-block readonly-h2" dangerouslySetInnerHTML={renderRich(block.content)} />;
+      return <h2 className="readonly-block readonly-h2" {...rich(block.content)} />;
     case 'heading3':
-      return <h3 className="readonly-block readonly-h3" dangerouslySetInnerHTML={renderRich(block.content)} />;
+      return <h3 className="readonly-block readonly-h3" {...rich(block.content)} />;
     case 'bullet_list':
       return (
         <div className="readonly-block readonly-list">
           <span className="readonly-list-marker">•</span>
-          <span dangerouslySetInnerHTML={renderRich(block.content)} />
+          <span {...rich(block.content)} />
         </div>
       );
     case 'numbered_list':
@@ -43,7 +65,7 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
       return (
         <div className="readonly-block readonly-list">
           <span className="readonly-list-marker">1.</span>
-          <span dangerouslySetInnerHTML={renderRich(block.content)} />
+          <span {...rich(block.content)} />
         </div>
       );
     case 'todo':
@@ -59,13 +81,13 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
         </div>
       );
     case 'quote':
-      return <div className="readonly-block readonly-quote" dangerouslySetInnerHTML={renderRich(block.content)} />;
+      return <div className="readonly-block readonly-quote" {...rich(block.content)} />;
     case 'callout':
       // Callout: "💡 " prefix + rich content. inlineMarkdownToHtml escapes
       // the text so the emoji is rendered as a safe literal.
       return (
         <div className="readonly-block readonly-callout">
-          💡 <span dangerouslySetInnerHTML={renderRich(block.content)} />
+          💡 <span {...rich(block.content)} />
         </div>
       );
     case 'divider':
@@ -84,28 +106,16 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
           </pre>
         </div>
       );
-    case 'math': {
-      let html = '';
-      try {
-        html = katex.renderToString(block.content || '', {
-          displayMode: true,
-          throwOnError: false,
-        });
-      } catch (e: any) {
-        html = `<span class="katex-error">${e?.message || 'LaTeX error'}</span>`;
-      }
-      return (
-        <div
-          className="readonly-block readonly-math"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      );
-    }
+    case 'math':
+      return <ReadOnlyMath latex={block.content} />;
     case 'image':
       return (
         <div className="readonly-block readonly-image">
           {block.content ? (
-            <img src={block.content.startsWith('http') || block.content.startsWith('/') || block.content.startsWith('data:') ? block.content : `/api/files/${block.content}`} alt={block.language || ''} loading="lazy" />
+            <ReadOnlyImage
+              src={block.content.startsWith('http') || block.content.startsWith('/') || block.content.startsWith('data:') ? block.content : `/api/files/${block.content}`}
+              alt={block.language || ''}
+            />
           ) : null}
         </div>
       );
@@ -143,8 +153,41 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
       );
     case 'paragraph':
     default:
-      return <div className="readonly-block readonly-paragraph" dangerouslySetInnerHTML={renderRich(block.content)} />;
+      return <div className="readonly-block readonly-paragraph" {...rich(block.content)} />;
   }
+}
+
+// KaTeX is loaded on demand (see katexLoader); until then a short placeholder
+// keeps the block's place in the page.
+function ReadOnlyMath({ latex }: { latex: string }) {
+  const { t } = useLanguage();
+  const html = useKatexHtml(latex || '');
+  if (html === null) {
+    return <div className="readonly-block readonly-math math-loading">{t('math.loading')}</div>;
+  }
+  return <div className="readonly-block readonly-math" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+// Image with click-to-zoom. A real <button> wraps the picture so keyboard users
+// can open the viewer too (the shared view has no editor wrapper to focus).
+function ReadOnlyImage({ src, alt }: { src: string; alt: string }) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="media-zoom-btn"
+        onClick={() => setOpen(true)}
+        aria-label={alt ? `${t('editor.imageZoom')}: ${alt}` : t('editor.imageZoom')}
+      >
+        <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} />
+      </button>
+      {open && <ImageLightbox src={src} alt={alt || t('editor.imageAlt')} onClose={close} />}
+    </>
+  );
 }
 
 function CopyButton({ text }: { text: string }) {

@@ -1,7 +1,6 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import katex from 'katex';
-import { Block as BlockType, BlockType as BType } from '../types';
+import { Block as BlockType, BlockType as BType, UploadState } from '../types';
 import { usePageContext } from '../contexts/PageContext';
 import {
   LightbulbIcon,
@@ -26,30 +25,118 @@ import {
 } from './Icons';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
 import { EditLinkModal } from './EditLinkModal';
-import { inlineMarkdownToHtml, plainTextToSafeHtml } from './inlineMarkdown';
+import { ImageLightbox } from './ImageLightbox';
+import { UploadStatus } from './UploadStatus';
+import { formatFileSize } from '../utils/uploads';
+import { inlineMarkdownToHtml, plainTextToSafeHtml, InlineOptions } from './inlineMarkdown';
+import { useKatexHtml } from '../utils/katexLoader';
 import { useLanguage } from '../i18n/LanguageContext';
 
 // Image block. Default 200px wide, drag the bottom-right corner to resize
 // (CSS resize: both), max width capped at the md breakpoint (768px).
 // Size persists per block id in localStorage.
+//
+// While a file is uploading the block already shows the local picture (blob:
+// URL) with a progress strip on top; `upload` is that client-only state.
 function ImageBlock({
   block,
   imgSrc,
   setRef,
   onKeyDown,
+  upload,
+  onPickFile,
+  onCancelUpload,
+  onRetryUpload,
+  onUploadSettled,
 }: {
   block: BlockType;
   imgSrc: string;
   setRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (id: string, e: React.KeyboardEvent) => void;
+  upload?: UploadState;
+  onPickFile?: (id: string) => void;
+  onCancelUpload?: (id: string) => void;
+  onRetryUpload?: (id: string) => void;
+  onUploadSettled?: (id: string) => void;
 }) {
+  const { t } = useLanguage();
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const closeZoom = useCallback(() => setZoomOpen(false), []);
+  const alt = block.language || t('editor.imageAlt');
+
+  // Keyboard focus stays on the wrapper (that's what the editor navigates
+  // with). Space is free in handleKeyDown, so it triggers the block's action:
+  // pick a file for an empty block, zoom for a filled one.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ' && e.target === e.currentTarget && !upload) {
+      e.preventDefault();
+      if (!block.content) onPickFile?.(block.id);
+      else setZoomOpen(true);
+      return;
+    }
+    onKeyDown(block.id, e);
+  };
+
+  // Uploading, queued or failed: local preview + status strip.
+  if (upload && upload.status !== 'done') {
+    return (
+      <div
+        className="block-image block-image--upload"
+        ref={setRef as any}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+      >
+        {upload.previewUrl ? (
+          <img
+            className={upload.status === 'error' ? 'is-failed' : 'is-uploading'}
+            src={upload.previewUrl}
+            alt={upload.fileName}
+            decoding="async"
+            draggable={false}
+          />
+        ) : (
+          <div className="block-image-placeholder">
+            <ImageIcon size={20} />
+            <span>{upload.fileName}</span>
+          </div>
+        )}
+        <UploadStatus
+          upload={upload}
+          onCancel={onCancelUpload ? () => onCancelUpload(block.id) : undefined}
+          onRetry={onRetryUpload ? () => onRetryUpload(block.id) : undefined}
+        />
+      </div>
+    );
+  }
+
   if (!block.content) {
     return (
-      <div className="block-image" ref={setRef as any} tabIndex={0} onKeyDown={(e) => onKeyDown(block.id, e)}>
-        <div className="block-image-placeholder">
+      <div className="block-image" ref={setRef as any} tabIndex={0} onKeyDown={handleKeyDown}>
+        <div
+          className="block-image-placeholder block-image-placeholder--action"
+          role="button"
+          onClick={() => onPickFile?.(block.id)}
+        >
           <ImageIcon size={20} />
-          <span>Click or press /image to upload</span>
+          <span>{t('editor.imagePlaceholder')}</span>
         </div>
+      </div>
+    );
+  }
+
+  // Upload just finished: keep the local picture on screen until the stored
+  // one has loaded, so the swap doesn't flash an empty frame.
+  if (upload?.status === 'done' && upload.previewUrl) {
+    return (
+      <div className="block-image" ref={setRef as any} tabIndex={0} onKeyDown={handleKeyDown}>
+        <img src={upload.previewUrl} alt={alt} decoding="async" draggable={false} />
+        <img
+          src={imgSrc}
+          alt=""
+          hidden
+          onLoad={() => onUploadSettled?.(block.id)}
+          onError={() => onUploadSettled?.(block.id)}
+        />
       </div>
     );
   }
@@ -59,9 +146,18 @@ function ImageBlock({
       className="block-image"
       ref={setRef as any}
       tabIndex={0}
-      onKeyDown={(e) => onKeyDown(block.id, e)}
+      onKeyDown={handleKeyDown}
     >
-      <img src={imgSrc} alt={block.language || 'Image'} loading="lazy" />
+      <img
+        className="media-zoomable"
+        src={imgSrc}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onClick={() => setZoomOpen(true)}
+      />
+      {zoomOpen && <ImageLightbox src={imgSrc} alt={alt} onClose={closeZoom} />}
     </div>
   );
 }
@@ -125,6 +221,21 @@ interface Props {
   // Transform this block to another type (same id, same content). If not
   // provided, the "Convert to ..." context menu items are hidden.
   onTransform?: (id: string, newType: BType) => void;
+  // Duplicate this block (and its children) right after it. If not provided,
+  // the "Duplicate" context menu item is hidden.
+  onDuplicate?: (id: string) => void;
+  // Client-only upload state for this block (image/file being uploaded or
+  // failed). Absent for blocks that aren't mid-upload.
+  upload?: UploadState;
+  // Size of the file this block points at, when the editor already knows it
+  // (it was uploaded in this session). Blocks loaded from the server have none.
+  fileSize?: number;
+  // Open the editor's file picker for this block (empty image placeholder).
+  onPickFile?: (id: string) => void;
+  onCancelUpload?: (id: string) => void;
+  onRetryUpload?: (id: string) => void;
+  // The stored image finished loading, so the local preview can be released.
+  onUploadSettled?: (id: string) => void;
 }
 
 export function Block({
@@ -147,12 +258,25 @@ export function Block({
   isOnly,
   onDelete,
   onTransform,
+  onDuplicate,
+  upload,
+  fileSize,
+  onPickFile,
+  onCancelUpload,
+  onRetryUpload,
+  onUploadSettled,
 }: Props) {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const internalContent = useRef(block.content);
   const navigate = useNavigate();
   const { pages } = usePageContext();
   const { t } = useLanguage();
+
+  // Page links show the target page's icon. Resolved at render time so a
+  // renamed or re-iconed page updates without touching the stored markdown.
+  const inlineOpts = useMemo<InlineOptions>(() => ({
+    pageIcon: (pageId) => pages.find(p => p.id === pageId)?.icon || undefined,
+  }), [pages]);
 
   // Context menu position triggered by right-click on the handle.
   // null = closed. Viewport-space coords from the onContextMenu event.
@@ -186,13 +310,13 @@ export function Block({
       // blocks because that would break the "literal code" semantics.
       const html = block.type === 'code'
         ? plainTextToSafeHtml(block.content)
-        : inlineMarkdownToHtml(block.content);
+        : inlineMarkdownToHtml(block.content, inlineOpts);
       if (contentRef.current.innerHTML !== html) {
         contentRef.current.innerHTML = html;
       }
     }
     internalContent.current = block.content;
-  }, [block.content, block.type, isFocused]);
+  }, [block.content, block.type, isFocused, inlineOpts]);
 
   const handleInput = () => {
     const text = contentRef.current?.textContent || '';
@@ -227,6 +351,13 @@ export function Block({
     if (linkEl && e.button === 0) {
       e.preventDefault();
       e.stopPropagation();
+      // Links to another page open in-app (a full reload would drop pending
+      // edits and the SPA state). Right-click still opens the link editor.
+      const pageId = linkEl.getAttribute('data-page-id');
+      if (pageId) {
+        navigate(`/page/${pageId}`);
+        return;
+      }
       openLinkEditor(linkEl);
     }
   };
@@ -288,7 +419,7 @@ export function Block({
       if (block.type === 'code') {
         if (el.textContent !== block.content) el.textContent = block.content;
       } else if (!isFocused) {
-        el.innerHTML = inlineMarkdownToHtml(block.content);
+        el.innerHTML = inlineMarkdownToHtml(block.content, inlineOpts);
       } else {
         if (el.textContent !== block.content) el.textContent = block.content;
       }
@@ -377,17 +508,39 @@ export function Block({
           imgSrc={imgSrc}
           setRef={setRef}
           onKeyDown={onKeyDown}
+          upload={upload}
+          onPickFile={onPickFile}
+          onCancelUpload={onCancelUpload}
+          onRetryUpload={onRetryUpload}
+          onUploadSettled={onUploadSettled}
         />;
       }
 
-      case 'file':
+      case 'file': {
+        // Mid-upload (or failed): no download link yet, show the progress strip.
+        if (upload && upload.status !== 'done') {
+          return (
+            <div className="block-file block-file--upload" ref={setRef as any} tabIndex={0} onKeyDown={(e) => onKeyDown(block.id, e)}>
+              <span className="block-file-icon"><PaperclipIcon size={16} /></span>
+              <span className="block-file-name">{upload.fileName}</span>
+              <span className="block-file-size">{formatFileSize(upload.fileSize)}</span>
+              <UploadStatus
+                upload={upload}
+                onCancel={onCancelUpload ? () => onCancelUpload(block.id) : undefined}
+                onRetry={onRetryUpload ? () => onRetryUpload(block.id) : undefined}
+              />
+            </div>
+          );
+        }
         return (
           <a href={block.content ? `/api/files/${block.content}` : '#'} download={block.language || 'file'} className="block-file" ref={setRef as any} tabIndex={0} onKeyDown={(e) => onKeyDown(block.id, e)}>
             <span className="block-file-icon"><PaperclipIcon size={16} /></span>
             <span className="block-file-name">{block.language || 'Attached file'}</span>
+            {fileSize !== undefined && <span className="block-file-size">{formatFileSize(fileSize)}</span>}
             <span className="block-file-download">Download</span>
           </a>
         );
+      }
 
       case 'subpage': {
         // block.content = subpage's page_id
@@ -473,6 +626,16 @@ export function Block({
           { divider: true as const },
         ]
       : []),
+    ...(onDuplicate
+      ? [{
+          label: t('ctx.duplicate'),
+          icon: <CopyIcon size={14} />,
+          // Same reason as delete: a second block would point at the same page.
+          disabled: block.type === 'subpage',
+          title: block.type === 'subpage' ? t('ctx.duplicateSubpageHint') : undefined,
+          onClick: () => onDuplicate(block.id),
+        }]
+      : []),
     {
       label: t('ctx.delete'),
       icon: <TrashIcon size={14} />,
@@ -546,7 +709,9 @@ export function Block({
           <MoreHorizontalIcon size={14} />
         </div>
       </div>
-      {renderBlockInner()}
+      {/* Keyed by type: React would otherwise reuse the same <div> when a text
+          block becomes a to-do/callout, keeping the text node written by hand. */}
+      <React.Fragment key={block.type}>{renderBlockInner()}</React.Fragment>
 
       {menuPos && (
         <ContextMenu
@@ -837,18 +1002,10 @@ function MathBlock({
     setLatexInput(block.content || '');
   }, [block.content]);
 
-  const renderedHtml = useMemo(() => {
-    const raw = editing ? latexInput : block.content;
-    if (!raw || !raw.trim()) return '';
-    try {
-      return katex.renderToString(raw, {
-        displayMode: true,
-        throwOnError: false,
-      });
-    } catch (e: any) {
-      return `<span class="katex-error">${e?.message || 'LaTeX syntax error'}</span>`;
-    }
-  }, [block.content, editing, latexInput]);
+  // KaTeX loads on demand; `null` means it is still on its way.
+  const renderedHtml = useKatexHtml(editing ? latexInput : block.content);
+  const { t } = useLanguage();
+  const loadingFallback = <div className="math-loading">{t('math.loading')}</div>;
 
   const handleFinishEditing = () => {
     setEditing(false);
@@ -903,7 +1060,7 @@ function MathBlock({
               }
             }}
           />
-          {renderedHtml && (
+          {renderedHtml === null ? loadingFallback : renderedHtml && (
             <div
               className="block-math-preview"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
@@ -916,7 +1073,7 @@ function MathBlock({
           onClick={() => setEditing(true)}
           title="Click to edit LaTeX formula"
         >
-          {renderedHtml ? (
+          {renderedHtml === null ? loadingFallback : renderedHtml ? (
             <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
           ) : (
             <div className="block-math-placeholder">

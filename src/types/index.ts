@@ -6,7 +6,26 @@ export interface Page {
   position: number;
   created_at: string;
   updated_at: string;
+  // Page-level preferences and state, stored in the DB so they follow the user
+  // across devices.
+  is_favorite: boolean;
+  full_width: boolean;
+  is_project: boolean;
+  // Gradient CSS string or image URL; null = no cover.
+  cover: string | null;
+  // Set while the page is in Trash (ISO-like UTC timestamp), otherwise null.
+  deleted_at: string | null;
   children?: Page[];
+}
+
+// A row of the Trash list (GET /pages/trash): only trashed pages whose parent
+// is not trashed, so a restore brings the whole subtree back.
+export interface TrashedPage {
+  id: string;
+  title: string;
+  icon: string;
+  parent_id: string | null;
+  deleted_at: string;
 }
 
 export type BlockType =
@@ -60,6 +79,20 @@ export interface FileInfo {
   url: string;
   page_id: string | null;
   created_at: string;
+}
+
+// Client-only state of an in-flight (or failed) file upload, keyed by block id
+// in the editor. Never persisted: the block itself only stores the file id once
+// the upload has finished.
+export interface UploadState {
+  status: 'queued' | 'uploading' | 'done' | 'error';
+  // 0..1. 0 while still waiting or compressing, so the UI shows it as indeterminate.
+  progress: number;
+  // blob: URL of the local file for images, so the block shows the picture at once.
+  previewUrl: string | null;
+  fileName: string;
+  fileSize: number;
+  error?: string;
 }
 
 export interface BlockTypeOption {

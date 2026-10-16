@@ -69,7 +69,49 @@ export function runMigrations(): { applied: string[]; skipped: string[] } {
       }
     }
   }
+  healSchema();
   return { applied, skipped };
+}
+
+// Columns that later migrations added to existing tables, with the exact
+// definition each one uses. SQLite has no ADD COLUMN IF NOT EXISTS and the
+// runner above marks a whole file applied on the first "duplicate column", so
+// a local DB can end up with a migration recorded but only partly applied (or
+// created by an older build). Re-adding what is missing keeps such a DB usable
+// instead of failing at query time with "no such column".
+const EXPECTED_COLUMNS: { table: string; column: string; ddl: string }[] = [
+  // Local uploads live on disk (see POST /api/files/upload in server/index.ts).
+  { table: 'files', column: 'storage', ddl: "storage TEXT NOT NULL DEFAULT 'disk'" },
+  { table: 'pages', column: 'deleted_at', ddl: 'deleted_at TEXT' },
+  { table: 'pages', column: 'is_favorite', ddl: 'is_favorite INTEGER NOT NULL DEFAULT 0' },
+  { table: 'pages', column: 'full_width', ddl: 'full_width INTEGER NOT NULL DEFAULT 0' },
+  { table: 'pages', column: 'is_project', ddl: 'is_project INTEGER NOT NULL DEFAULT 0' },
+  { table: 'pages', column: 'cover', ddl: 'cover TEXT' },
+];
+
+function healSchema(): void {
+  for (const { table, column, ddl } of EXPECTED_COLUMNS) {
+    // Table names come from the constant above, never from user input.
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (cols.length === 0) continue; // table itself missing: nothing to heal
+    if (cols.some(c => c.name === column)) continue;
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+    console.warn(`[db] healed schema: added ${table}.${column}`);
+  }
+  // The index from 0006 is lost if that file was skipped on a duplicate column.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_deleted_at ON pages(deleted_at)');
+}
+
+// Helper: converts the 0/1 flags SQLite stores on a page into booleans, so the
+// API returns the same shape as the Hono backend.
+export function normalizePage(p: Row | undefined): Row | undefined {
+  if (!p) return p;
+  return {
+    ...p,
+    is_favorite: Boolean(p.is_favorite),
+    full_width: Boolean(p.full_width),
+    is_project: Boolean(p.is_project),
+  };
 }
 
 // Helper: converts `checked` (which SQLite stores as 0/1) to boolean. Used

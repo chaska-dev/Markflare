@@ -1,4 +1,4 @@
-import type { Page, PageWithBlocks, Block, FileInfo, SearchResult } from '../types';
+import type { Page, PageWithBlocks, Block, FileInfo, SearchResult, TrashedPage } from '../types';
 
 export class ApiError extends Error {
   status: number;
@@ -94,17 +94,93 @@ export const api = {
       }
       return res.json();
     },
+    // Same endpoint as `upload`, but through XMLHttpRequest because fetch has no
+    // upload progress events. `onProgress` gets 0..1. Aborting `signal` rejects
+    // with an AbortError and cancels the request.
+    uploadWithProgress: (
+      file: File,
+      pageId: string | undefined,
+      onProgress: (fraction: number) => void,
+      signal?: AbortSignal
+    ): Promise<{ file: FileInfo }> =>
+      new Promise((resolve, reject) => {
+        const abortError = () => new DOMException('Upload cancelled', 'AbortError');
+        if (signal?.aborted) return reject(abortError());
+
+        const token = localStorage.getItem('auth_token');
+        const formData = new FormData();
+        formData.append('file', file);
+        if (pageId) formData.append('page_id', pageId);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE}/files/upload`);
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
+        };
+        xhr.onload = () => {
+          signal?.removeEventListener('abort', onAbort);
+          if (xhr.status === 401) {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_expires_at');
+            window.location.href = '/login';
+            return reject(new ApiError('Unauthorized', 401));
+          }
+          let data: any = null;
+          try { data = JSON.parse(xhr.responseText); } catch { /* body wasn't JSON */ }
+          if (xhr.status >= 200 && xhr.status < 300 && data) return resolve(data);
+          const message = data && typeof data.error === 'string' ? data.error : `Upload error: ${xhr.status}`;
+          reject(new ApiError(message, xhr.status, data));
+        };
+        // status 0 marks a request that never got an HTTP answer (offline, reset).
+        xhr.onerror = () => {
+          signal?.removeEventListener('abort', onAbort);
+          reject(new ApiError('Network error', 0));
+        };
+        xhr.onabort = () => reject(abortError());
+
+        // xhr.abort() fires no event if the request never started, so reject here too.
+        const onAbort = () => {
+          xhr.abort();
+          reject(abortError());
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+
+        xhr.send(formData);
+      }),
     getUrl: (id: string) => `${API_BASE}/files/${id}`,
   },
   pages: {
     list: () => request<{ pages: Page[] }>('/pages'),
-    get: (id: string) => request<{ page: PageWithBlocks }>(`/pages/${id}`),
+    // `includeTrashed` lets the editor open a page that is in Trash (to show
+    // the restore banner); otherwise the API answers 404 for it.
+    get: (id: string, opts?: { includeTrashed?: boolean }) =>
+      request<{ page: PageWithBlocks }>(`/pages/${id}${opts?.includeTrashed ? '?include_trashed=1' : ''}`),
     create: (data: { title?: string; parent_id?: string | null; icon?: string }) =>
       request<{ page: Page }>('/pages', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Pick<Page, 'title' | 'icon' | 'parent_id' | 'position'>>) =>
+    update: (
+      id: string,
+      data: Partial<Pick<Page, 'title' | 'icon' | 'parent_id' | 'position' | 'is_favorite' | 'full_width' | 'is_project' | 'cover'>>
+    ) =>
       request<{ page: Page }>(`/pages/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    // Moves the page (and its subpages) to Trash; nothing is lost yet.
     delete: (id: string) =>
       request<{ success: boolean; deletedPages: number }>(`/pages/${id}`, { method: 'DELETE' }),
+    duplicate: (id: string) =>
+      request<{ page: Page; copiedBlocks: number }>(`/pages/${id}/duplicate`, { method: 'POST' }),
+    trash: () => request<{ pages: TrashedPage[] }>('/pages/trash'),
+    restore: (id: string) =>
+      request<{ page: Page; restoredPages: number }>(`/pages/${id}/restore`, { method: 'POST' }),
+    // Irreversible: removes the page, its subpages, blocks and orphaned files.
+    deletePermanent: (id: string) =>
+      request<{ success: boolean; deletedPages: number; deletedFiles: number }>(`/pages/${id}/permanent`, {
+        method: 'DELETE',
+      }),
+    emptyTrash: () =>
+      request<{ success: boolean; deletedPages: number; deletedFiles: number }>('/pages/trash', {
+        method: 'DELETE',
+      }),
     cascadeCount: (id: string) =>
       request<{ pages: number; blocks: number }>(`/pages/${id}/cascade-count`),
     export: (id: string) =>

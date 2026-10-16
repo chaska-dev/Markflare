@@ -177,7 +177,9 @@ version that kept uploads in the database, in [File storage (R2)](#file-storage-
 #### 1.3. Create the tables
 
 Open `markflare-db` → **Console** tab. Paste each of the five blocks below and hit
-**Execute**, in order.
+**Execute**, in order. Then run the `ALTER TABLE` statements of
+[`0006_page_features.sql`](migrations/0006_page_features.sql) once (see
+[Database schema](#database-schema)).
 
 Every block uses `IF NOT EXISTS` throughout, so re-running any of them is safe. The full
 SQL also lives in [`migrations/`](migrations) if you'd rather apply it from a terminal —
@@ -541,6 +543,14 @@ transaction. They are idempotent, so re-running is safe.
 | `0003_workspace.sql` | `workspace` singleton (sidebar name + icon) |
 | `0004_shares.sql` | `page_shares` — public share tokens with a `revoked` tombstone |
 | `0005_api_tokens.sql` | `api_tokens` — tokens for the MCP server and CLI integrations |
+| `0006_page_features.sql` | `pages.deleted_at` (Trash), `is_favorite`, `full_width`, `is_project`, `cover` + index |
+
+> **`0006` is required before deploying this version.** The API now filters on
+> `pages.deleted_at`, so against a D1 that has not applied it every page request fails with
+> "no such column". Run `pnpm run db:migrate:prod` first. The file is plain `ALTER TABLE`
+> statements (SQLite cannot make those idempotent), so if you apply migrations by hand in the
+> dashboard, run it exactly once. The local server self-heals a half-applied dev database
+> (`healSchema()` in `server/db.ts`), so `pnpm run dev` needs no extra step.
 
 To apply them to a remote D1 from a terminal:
 
@@ -570,10 +580,15 @@ Everything is mounted under `/api`. 🔒 routes need a bearer token from
 | GET | `/api/pages` | 🔒 | List all pages |
 | POST | `/api/pages` | 🔒 | Create a page |
 | POST | `/api/pages/import` | 🔒 | Create a page from markdown |
-| GET | `/api/pages/:id` | 🔒 | Page + ordered blocks |
+| GET | `/api/pages/:id` | 🔒 | Page + ordered blocks (404 if trashed, unless `?include_trashed=1`) |
 | GET | `/api/pages/:id/export` | 🔒 | Export page as markdown |
-| PUT | `/api/pages/:id` | 🔒 | Update page |
-| DELETE | `/api/pages/:id` | 🔒 | Cascade delete page, descendants, blocks and their files |
+| PUT | `/api/pages/:id` | 🔒 | Update page (`title`, `icon`, `parent_id`, `position`, `is_favorite`, `full_width`, `is_project`, `cover`) |
+| GET | `/api/pages/trash` | 🔒 | Trashed pages whose parent is not trashed (also purges items older than 30 days) |
+| DELETE | `/api/pages/trash` | 🔒 | Empty the trash (permanent) |
+| DELETE | `/api/pages/:id` | 🔒 | Move page and descendants to Trash (soft delete) |
+| DELETE | `/api/pages/:id/permanent` | 🔒 | Cascade delete page, descendants, blocks and their files |
+| POST | `/api/pages/:id/restore` | 🔒 | Restore from Trash (to the root if its parent is still trashed) |
+| POST | `/api/pages/:id/duplicate` | 🔒 | Copy a page and its blocks next to the original |
 | GET | `/api/pages/:id/cascade-count` | 🔒 | How many pages/blocks a delete would remove |
 | POST | `/api/pages/:id/blocks` | 🔒 | Create a block |
 | PUT | `/api/blocks/:id` | 🔒 | Update a block (reparenting is cycle-safe) |

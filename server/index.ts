@@ -10,7 +10,7 @@ import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
-import { db, runMigrations, normalizeBlock, Row } from './db';
+import { db, runMigrations, normalizeBlock, normalizePage, Row } from './db';
 import {
   loadAuthEnv,
   issueToken,
@@ -47,11 +47,33 @@ if (migResult.skipped.length > 0) {
   console.log(`[server] migrations already applied: ${migResult.skipped.join(', ')}`);
 }
 
-// Multer in-memory: 10MB max, same as the Hono backend limit.
+// Upload size cap, same as the Hono backend (functions/api/[[route]].ts) and
+// the client-side check.
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+// Multer in-memory, capped at MAX_UPLOAD_BYTES.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_BYTES },
 });
+
+// GET /api/files/:id is public (share links render images) and answers from the
+// app's own origin, so whatever content type was uploaded must never be able
+// to run script there (an uploaded .html or .svg could read `auth_token` from
+// localStorage). Only these raster/media types are shown inline; everything
+// else is forced to download. Mirrors the Hono backend.
+const INLINE_SAFE_TYPES = new Set([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif',
+  'video/mp4', 'video/webm',
+  'audio/mpeg', 'audio/ogg', 'audio/wav',
+  'application/pdf',
+]);
+
+// RFC 5987 value: encodeURIComponent leaves ' ( ) * unescaped, which are not
+// allowed in an ext-value.
+function encodeContentDispositionName(name: string): string {
+  return encodeURIComponent(name).replace(/['()*]/g, ch => '%' + ch.charCodeAt(0).toString(16).toUpperCase());
+}
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -171,7 +193,8 @@ function findShareRoot(token: string): any | null {
     .prepare('SELECT page_id FROM page_shares WHERE token = ? AND revoked = 0')
     .get(token);
   if (!row) return null;
-  return db.prepare('SELECT * FROM pages WHERE id = ?').get(row.page_id);
+  // A page in Trash is not reachable through its public link until restored.
+  return db.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').get(row.page_id);
 }
 
 // GET /api/share/:token — public tree of the shared page.
@@ -183,12 +206,12 @@ app.get('/api/share/:token', (req, res) => {
   const root = findShareRoot(token);
   if (!root) return res.status(404).json({ error: 'Link not found or disabled' });
 
-  const ids = collectDescendantPageIds(root.id);
+  const ids = collectDescendantPageIds(root.id, true);
   const placeholders = ids.map(() => '?').join(',');
   const pages = db
     .prepare(`SELECT * FROM pages WHERE id IN (${placeholders}) ORDER BY position ASC, created_at ASC`)
     .all(...ids);
-  res.json({ root, pages });
+  res.json({ root: normalizePage(root), pages: pages.map((p: any) => normalizePage(p)) });
 });
 
 // GET /api/share/:token/page/:pageId — content (page + blocks) of a page
@@ -201,18 +224,18 @@ app.get('/api/share/:token/page/:pageId', (req, res) => {
   const root = findShareRoot(token);
   if (!root) return res.status(404).json({ error: 'Link not found or disabled' });
 
-  const allowedIds = collectDescendantPageIds(root.id);
+  const allowedIds = collectDescendantPageIds(root.id, true);
   if (!allowedIds.includes(pageId)) {
     return res.status(403).json({ error: 'Page outside the shared link' });
   }
 
-  const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(pageId);
+  const page: any = db.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').get(pageId);
   if (!page) return res.status(404).json({ error: 'Page not found' });
   const blocks = db
     .prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC')
     .all(pageId)
     .map((b: any) => normalizeBlock(b));
-  res.json({ page, blocks });
+  res.json({ page: normalizePage(page), blocks });
 });
 
 // Auth-gated: everything below requires a Bearer token.
@@ -266,7 +289,7 @@ app.put('/api/workspace', (req, res) => {
 // create the row with revoked=0.
 app.post('/api/pages/:id/share', (req, res) => {
   const pageId = req.params.id;
-  const page: any = db.prepare('SELECT id FROM pages WHERE id = ?').get(pageId);
+  const page: any = db.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').get(pageId);
   if (!page) return res.status(404).json({ error: 'Page not found' });
 
   const existing: any = db.prepare('SELECT token, revoked FROM page_shares WHERE page_id = ?').get(pageId);
@@ -304,8 +327,185 @@ app.delete('/api/pages/:id/share', (req, res) => {
 
 // 1. GET /api/pages
 app.get('/api/pages', (_req, res) => {
-  const pages = db.prepare('SELECT * FROM pages ORDER BY position ASC, created_at DESC').all();
+  const pages = db
+    .prepare('SELECT * FROM pages WHERE deleted_at IS NULL ORDER BY position ASC, created_at DESC')
+    .all();
+  res.json({ pages: pages.map((p: any) => normalizePage(p)) });
+});
+
+// Trash ------------------------------------------------------------------
+// DELETE /api/pages/:id only stamps `deleted_at` (on the page and all its
+// descendants). Nothing is lost until it is deleted permanently, by hand or
+// after TRASH_RETENTION_DAYS. These routes are registered before the
+// `/api/pages/:id` ones so "trash" is never read as a page id.
+
+// Same format as SQLite's datetime('now'), so every timestamp column compares
+// and sorts alike.
+function sqlTimestamp(ms: number = Date.now()): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+const TRASH_RETENTION_DAYS = 30;
+
+// Permanently remove pages (blocks, files, shares) from the database and disk.
+// Ids must already include every descendant.
+function purgePages(pageIds: string[]): { deletedFiles: number } {
+  if (pageIds.length === 0) return { deletedFiles: 0 };
+  // Delete blocks of all pages, then the pages themselves, in a single
+  // transaction so we never leave orphans.
+  //
+  // Also clean up subpage blocks that live in OTHER pages but reference one
+  // of the deleted pages (subpage blocks store the referenced page id in
+  // `content`). Without this, deleting a page leaves dangling subpage
+  // blocks in the parent documents that point to a no-longer-existing
+  // page. Subpages are intentionally not deletable inline, so removing
+  // the page is the only way for those references to disappear.
+  const inList = pageIds.map(() => '?').join(',');
+  const deleteBlocks = db.prepare('DELETE FROM blocks WHERE page_id = ?');
+  const deleteOrphanSubpageRefs = db.prepare(
+    `DELETE FROM blocks WHERE type = 'subpage' AND content IN (${inList})`
+  );
+  const deletePage = db.prepare('DELETE FROM pages WHERE id = ?');
+
+  // Files come from two sources, same as the Pages function: the rows attached
+  // to these pages, plus image/file blocks pointing at a stored file by ID. The
+  // bytes on disk have to go too — files.page_id is ON DELETE SET NULL, so
+  // deleting the page alone would strand them forever.
+  const byPage = db.prepare(`SELECT id FROM files WHERE page_id IN (${inList})`).all(...pageIds) as any[];
+  const byBlock = db.prepare(
+    `SELECT content FROM blocks WHERE type IN ('image', 'file') AND page_id IN (${inList})`
+  ).all(...pageIds) as any[];
+  const candidates = new Set<string>();
+  for (const row of byPage) candidates.add(row.id);
+  for (const row of byBlock) {
+    if (STORED_FILE_ID.test(row.content || '')) candidates.add(row.content);
+  }
+  const deleteFile = db.prepare('DELETE FROM files WHERE id = ?');
+  const stillReferenced = db.prepare(
+    "SELECT 1 AS x FROM blocks WHERE type IN ('image', 'file') AND content = ? LIMIT 1"
+  );
+
+  const fileIds: string[] = [];
+  const tx = db.transaction(() => {
+    deleteOrphanSubpageRefs.run(...pageIds);
+    for (const pid of pageIds) deleteBlocks.run(pid);
+    // A duplicated page shares its upload ids with the original, so a file is
+    // only dropped once no surviving block references it (checked after the
+    // blocks above are gone) — same rule as DELETE /api/blocks/:id.
+    for (const fid of candidates) {
+      if (stillReferenced.get(fid)) continue;
+      deleteFile.run(fid);
+      fileIds.push(fid);
+    }
+    for (const pid of pageIds) deletePage.run(pid);
+  });
+  tx();
+
+  // Unlink only after the transaction commits: a rollback must not leave rows
+  // pointing at bytes that are already gone.
+  for (const fid of fileIds) {
+    const filePath = path.join(uploadsDir, fid);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  return { deletedFiles: fileIds.length };
+}
+
+// Trashed pages whose parent is NOT trashed: what the Trash UI lists. A page
+// trashed together with its parent comes back with it, so it has no row of its
+// own.
+const TRASH_ROOTS_SQL = `SELECT id, title, icon, parent_id, deleted_at FROM pages p
+  WHERE p.deleted_at IS NOT NULL
+    AND (p.parent_id IS NULL
+         OR NOT EXISTS (SELECT 1 FROM pages pp WHERE pp.id = p.parent_id AND pp.deleted_at IS NOT NULL))`;
+
+// GET /api/pages/trash — also purges roots trashed longer than the retention
+// window, so no cron is needed.
+app.get('/api/pages/trash', (_req, res) => {
+  const cutoff = sqlTimestamp(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const expired = db.prepare(`${TRASH_ROOTS_SQL} AND p.deleted_at < ?`).all(cutoff) as { id: string }[];
+  for (const root of expired) purgePages(collectDescendantPageIds(root.id));
+
+  const pages = db.prepare(`${TRASH_ROOTS_SQL} ORDER BY p.deleted_at DESC`).all();
   res.json({ pages });
+});
+
+// DELETE /api/pages/trash — empty the trash (permanent).
+app.delete('/api/pages/trash', (_req, res) => {
+  const ids = (db.prepare('SELECT id FROM pages WHERE deleted_at IS NOT NULL').all() as { id: string }[])
+    .map(r => r.id);
+  const { deletedFiles } = purgePages(ids);
+  res.json({ success: true, deletedPages: ids.length, deletedFiles });
+});
+
+// POST /api/pages/:id/restore — bring a page back with the descendants that
+// were trashed together with it (same deleted_at). If its parent is still in
+// Trash (or gone) the page returns at the workspace root instead.
+app.post('/api/pages/:id/restore', (req, res) => {
+  const id = req.params.id;
+  const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
+  if (!page) return res.status(404).json({ error: 'Not found' });
+  if (!page.deleted_at) return res.json({ page: normalizePage(page), restoredPages: 0 });
+
+  const ids = collectDescendantPageIds(id);
+  const restore = db.prepare('UPDATE pages SET deleted_at = NULL WHERE id = ? AND deleted_at = ?');
+  const parent: any = page.parent_id
+    ? db.prepare('SELECT deleted_at FROM pages WHERE id = ?').get(page.parent_id)
+    : null;
+  const orphaned = Boolean(page.parent_id) && (!parent || parent.deleted_at !== null);
+  let restored = 0;
+  db.transaction(() => {
+    for (const pid of ids) restored += restore.run(pid, page.deleted_at).changes;
+    if (orphaned) db.prepare('UPDATE pages SET parent_id = NULL WHERE id = ?').run(id);
+  })();
+  const fresh = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
+  res.json({ page: normalizePage(fresh as Row), restoredPages: restored });
+});
+
+// POST /api/pages/:id/duplicate — copy a page and its own blocks, placed right
+// after the original among its siblings. Subpage blocks are dropped (child
+// pages are not deep-copied, and a second link to the same child would be
+// misleading). Image/file blocks keep pointing at the same upload id: the
+// block and page delete paths only remove a file once nothing references it.
+app.post('/api/pages/:id/duplicate', (req, res) => {
+  const src: any = db.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!src) return res.status(404).json({ error: 'Not found' });
+
+  const next: any = db.prepare(
+    `SELECT MIN(position) AS pos FROM pages
+     WHERE parent_id IS ? AND deleted_at IS NULL AND position > ?`
+  ).get(src.parent_id ?? null, src.position);
+  const position = next && next.pos !== null ? (src.position + next.pos) / 2 : src.position + 1000;
+
+  const newId = crypto.randomUUID();
+  const title = `${src.title || 'Untitled'} (copy)`.slice(0, 500);
+  const blocks: any[] = db.prepare(
+    "SELECT * FROM blocks WHERE page_id = ? AND type != 'subpage' ORDER BY position ASC"
+  ).all(src.id);
+  // Block ids are remapped so the copy owns its own tree; a parent that was
+  // dropped (or missing) leaves the child at the top level.
+  const idMap = new Map<string, string>();
+  for (const b of blocks) idMap.set(b.id, crypto.randomUUID());
+
+  const insertPage = db.prepare(
+    `INSERT INTO pages (id, title, icon, parent_id, position, cover, full_width, is_project)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const insertBlock = db.prepare(
+    `INSERT INTO blocks (id, page_id, type, content, checked, language, position, parent_id, collapsed)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  db.transaction(() => {
+    insertPage.run(newId, title, src.icon, src.parent_id ?? null, position, src.cover ?? null, src.full_width, src.is_project);
+    for (const b of blocks) {
+      insertBlock.run(
+        idMap.get(b.id), newId, b.type, b.content, b.checked, b.language, b.position,
+        b.parent_id ? idMap.get(b.parent_id) ?? null : null, b.collapsed
+      );
+    }
+  })();
+
+  const page = db.prepare('SELECT * FROM pages WHERE id = ?').get(newId);
+  res.json({ page: normalizePage(page as Row), copiedBlocks: blocks.length });
 });
 
 // 2. POST /api/pages
@@ -329,7 +529,7 @@ app.post('/api/pages', (req, res) => {
   });
   tx();
   const page = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
-  res.json({ page });
+  res.json({ page: normalizePage(page as Row) });
 });
 
 // 2.5 POST /api/pages/import
@@ -356,7 +556,7 @@ app.post('/api/pages/import', (req, res) => {
     });
   });
   tx();
-  const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
+  const page: any = normalizePage(db.prepare('SELECT * FROM pages WHERE id = ?').get(id) as Row);
   const insertedBlocks = db.prepare(
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
   ).all(id).map(normalizeBlock);
@@ -365,20 +565,24 @@ app.post('/api/pages/import', (req, res) => {
 });
 
 // 3. GET /api/pages/:id
+// A trashed page is a 404 unless `?include_trashed=1` is passed — the editor
+// uses that to show the "in Trash" banner for a page opened by URL.
 app.get('/api/pages/:id', (req, res) => {
   const id = req.params.id;
   const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
-  if (!page) return res.status(404).json({ error: 'Not found' });
+  if (!page || (page.deleted_at && req.query.include_trashed !== '1')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const blocks = db.prepare(
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
   ).all(id).map(normalizeBlock);
-  res.json({ page: { ...page, blocks } });
+  res.json({ page: { ...normalizePage(page), blocks } });
 });
 
 // 3.5 GET /api/pages/:id/export
 app.get('/api/pages/:id/export', (req, res) => {
   const id = req.params.id;
-  const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
+  const page: any = db.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').get(id);
   if (!page) return res.status(404).json({ error: 'Not found' });
   const blocks: any[] = db.prepare(
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
@@ -419,73 +623,56 @@ app.get('/api/pages/:id/export', (req, res) => {
 app.put('/api/pages/:id', (req, res) => {
   const id = req.params.id;
   const body = req.body || {};
+  // Pages in Trash are read-only until restored.
+  const existing: any = db.prepare('SELECT deleted_at FROM pages WHERE id = ?').get(id);
+  if (!existing || existing.deleted_at) return res.status(404).json({ error: 'Not found' });
   const updates: string[] = [];
   const params: any[] = [];
   if (typeof body.title === 'string') { updates.push('title = ?'); params.push(body.title.slice(0, 500)); }
   if (typeof body.icon === 'string') { updates.push('icon = ?'); params.push(body.icon.slice(0, 32)); }
   if (body.parent_id === null || typeof body.parent_id === 'string') { updates.push('parent_id = ?'); params.push(body.parent_id); }
   if (Number.isFinite(body.position)) { updates.push('position = ?'); params.push(Number(body.position)); }
+  if (typeof body.full_width === 'boolean') { updates.push('full_width = ?'); params.push(body.full_width ? 1 : 0); }
+  if (typeof body.is_project === 'boolean') { updates.push('is_project = ?'); params.push(body.is_project ? 1 : 0); }
+  // cover: a gradient/URL string, or null/'' to clear it.
+  if (body.cover === null || typeof body.cover === 'string') {
+    updates.push('cover = ?');
+    params.push(body.cover ? body.cover.slice(0, 2048) : null);
+  }
+  // Starring a page is not an edit: leave updated_at (and search order) alone.
+  const touchesContent = updates.length > 0;
+  if (typeof body.is_favorite === 'boolean') { updates.push('is_favorite = ?'); params.push(body.is_favorite ? 1 : 0); }
 
   if (updates.length > 0) {
-    updates.push(`updated_at = datetime('now')`);
+    if (touchesContent) updates.push(`updated_at = datetime('now')`);
     params.push(id);
     db.prepare(`UPDATE pages SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   }
   const page = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
-  res.json({ page });
+  res.json({ page: normalizePage(page as Row) });
 });
 
-// 5. DELETE /api/pages/:id
+// 5. DELETE /api/pages/:id — moves the page and all its descendants to Trash
+// (soft delete). Descendants that were already in Trash keep their earlier
+// timestamp, so restoring this page does not resurrect them.
 app.delete('/api/pages/:id', (req, res) => {
   const id = req.params.id;
   const pageIds = collectDescendantPageIds(id);
-  // Delete blocks of all descendant pages, then the pages themselves, in a
-  // single transaction so we never leave orphans.
-  //
-  // Also clean up subpage blocks that live in OTHER pages but reference one
-  // of the deleted pages (subpage blocks store the referenced page id in
-  // `content`). Without this, deleting a page leaves dangling subpage
-  // blocks in the parent documents that point to a no-longer-existing
-  // page. Subpages are intentionally not deletable inline, so removing
-  // the page is the only way for those references to disappear.
-  const deleteBlocks = db.prepare('DELETE FROM blocks WHERE page_id = ?');
-  const deleteOrphanSubpageRefs = db.prepare(
-    `DELETE FROM blocks WHERE type = 'subpage' AND content IN (${pageIds.map(() => '?').join(',') || "''"})`
-  );
-  const deletePage = db.prepare('DELETE FROM pages WHERE id = ?');
+  const stamp = db.prepare('UPDATE pages SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL');
+  const now = sqlTimestamp();
+  let trashed = 0;
+  db.transaction(() => {
+    for (const pid of pageIds) trashed += stamp.run(now, pid).changes;
+  })();
+  res.json({ success: true, deletedPages: trashed });
+});
 
-  // Files come from two sources, same as the Pages function: the rows attached
-  // to these pages, plus image/file blocks pointing at a stored file by ID. The
-  // bytes on disk have to go too — files.page_id is ON DELETE SET NULL, so
-  // deleting the page alone would strand them forever.
-  const inList = pageIds.map(() => '?').join(',') || "''";
-  const byPage = db.prepare(`SELECT id FROM files WHERE page_id IN (${inList})`).all(...pageIds) as any[];
-  const byBlock = db.prepare(
-    `SELECT content FROM blocks WHERE type IN ('image', 'file') AND page_id IN (${inList})`
-  ).all(...pageIds) as any[];
-  const fileIds = new Set<string>();
-  for (const row of byPage) fileIds.add(row.id);
-  for (const row of byBlock) {
-    if (STORED_FILE_ID.test(row.content || '')) fileIds.add(row.content);
-  }
-  const deleteFile = db.prepare('DELETE FROM files WHERE id = ?');
-
-  const tx = db.transaction((ids: string[]) => {
-    deleteOrphanSubpageRefs.run(...ids);
-    for (const pid of ids) deleteBlocks.run(pid);
-    for (const fid of fileIds) deleteFile.run(fid);
-    for (const pid of ids) deletePage.run(pid);
-  });
-  tx(pageIds);
-
-  // Unlink only after the transaction commits: a rollback must not leave rows
-  // pointing at bytes that are already gone.
-  for (const fid of fileIds) {
-    const filePath = path.join(uploadsDir, fid);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  }
-
-  res.json({ success: true, deletedPages: pageIds.length, deletedFiles: fileIds.size });
+// 5a. DELETE /api/pages/:id/permanent — the real, irreversible delete
+// (cascade: subpages, blocks and their files).
+app.delete('/api/pages/:id/permanent', (req, res) => {
+  const pageIds = collectDescendantPageIds(req.params.id);
+  const { deletedFiles } = purgePages(pageIds);
+  res.json({ success: true, deletedPages: pageIds.length, deletedFiles });
 });
 
 // 5b. GET /api/pages/:id/cascade-count — how many subpages and blocks would
@@ -501,11 +688,14 @@ app.get('/api/pages/:id/cascade-count', (req, res) => {
 });
 
 // Collect all descendant page ids (including the root) by walking the tree
-// via parent_id. Used by the cascade DELETE and the count endpoint.
-function collectDescendantPageIds(rootId: string): string[] {
+// via parent_id. Used by trash/restore/purge, the count endpoint and shares
+// (`liveOnly` skips subtrees in Trash, so a public link never exposes them).
+function collectDescendantPageIds(rootId: string, liveOnly = false): string[] {
   const result: string[] = [];
   const queue: string[] = [rootId];
-  const getChildren = db.prepare('SELECT id FROM pages WHERE parent_id = ?');
+  const getChildren = db.prepare(
+    liveOnly ? 'SELECT id FROM pages WHERE parent_id = ? AND deleted_at IS NULL' : 'SELECT id FROM pages WHERE parent_id = ?'
+  );
   while (queue.length > 0) {
     const current = queue.shift()!;
     result.push(current);
@@ -519,6 +709,8 @@ function collectDescendantPageIds(rootId: string): string[] {
 app.post('/api/pages/:pageId/blocks', (req, res) => {
   const pageId = req.params.pageId;
   const body = req.body || {};
+  const owner: any = db.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').get(pageId);
+  if (!owner) return res.status(404).json({ error: 'Page not found' });
   const id = crypto.randomUUID();
 
   const type = typeof body.type === 'string' ? body.type.slice(0, 32) : 'paragraph';
@@ -629,14 +821,14 @@ app.get('/api/search', requireAuth, (req, res) => {
   const pattern = `%${q}%`;
 
   const matchedPages: any[] = db.prepare(
-    'SELECT id, title, icon, updated_at FROM pages WHERE title LIKE ? ORDER BY updated_at DESC LIMIT 10'
+    'SELECT id, title, icon, updated_at FROM pages WHERE title LIKE ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10'
   ).all(pattern);
 
   const matchedBlocks: any[] = db.prepare(
     `SELECT b.id, b.page_id, b.content, b.type, b.updated_at, p.title as page_title, p.icon as page_icon
      FROM blocks b
      JOIN pages p ON b.page_id = p.id
-     WHERE b.content LIKE ? AND b.type NOT IN ('divider', 'subpage')
+     WHERE b.content LIKE ? AND b.type NOT IN ('divider', 'subpage') AND p.deleted_at IS NULL
      ORDER BY b.updated_at DESC LIMIT 25`
   ).all(pattern);
 
@@ -676,7 +868,17 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // 10. POST /api/files/upload (multipart with multer + disk storage).
-app.post('/api/files/upload', requireAuth, upload.single('file'), (req, res) => {
+// Multer aborts oversize bodies with an error that Express would turn into an
+// HTML 500, so it is mapped to the same JSON the Hono backend returns.
+app.post('/api/files/upload', requireAuth, (req, res, next) => {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large (max 25MB)' });
+    }
+    if (err) return next(err);
+    next();
+  });
+}, (req, res) => {
   const file = (req as any).file as Express.Multer.File | undefined;
   const pageId = (req.body?.page_id as string | undefined) || null;
   if (!file) return res.status(400).json({ error: 'No file' });
@@ -698,19 +900,38 @@ app.post('/api/files/upload', requireAuth, upload.single('file'), (req, res) => 
 
 // 11. GET /api/files/:id — serves from uploads/ on disk. No base64 fallback:
 // local dev mirrors the production path, which reads bytes from object storage.
+// Unauthenticated on purpose (public share links), hence the hardening headers:
+// nosniff + a sandboxing CSP on every file, inline display only for the
+// INLINE_SAFE_TYPES allowlist.
 app.get('/api/files/:id', (req, res) => {
-  const id = req.params.id;
+  const id = String(req.params.id);
+  // Ids are always UUIDs we generated; also keeps odd values out of path.join.
+  if (!STORED_FILE_ID.test(id)) return res.status(404).json({ error: 'Not found' });
   const filePath = path.join(uploadsDir, id);
 
-  const file: any = db.prepare('SELECT id, mime_type FROM files WHERE id = ?').get(id);
+  const file: any = db.prepare('SELECT id, name, mime_type FROM files WHERE id = ?').get(id);
   if (!file) return res.status(404).json({ error: 'Not found' });
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File data missing' });
   }
 
+  const baseType = String(file.mime_type || '').split(';')[0].trim().toLowerCase();
   res.setHeader('Content-Type', file.mime_type);
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader(
+    'Content-Security-Policy',
+    // Chrome refuses to open its PDF viewer inside a sandboxed document, and
+    // the viewer runs PDF script in its own isolated process anyway.
+    `default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'${baseType === 'application/pdf' ? '' : '; sandbox'}`
+  );
+  res.setHeader(
+    'Content-Disposition',
+    INLINE_SAFE_TYPES.has(baseType)
+      ? 'inline'
+      : `attachment; filename*=UTF-8''${encodeContentDispositionName(file.name || 'file')}`
+  );
   return res.sendFile(filePath);
 });
 

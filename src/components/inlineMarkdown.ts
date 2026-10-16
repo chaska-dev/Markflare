@@ -39,7 +39,19 @@ function safeHref(url: string): string | null {
 // server/shared/markdown.ts.
 const STASH_RE = /\u0000(\d+)\u0000/g;
 
-export function inlineMarkdownToHtml(text: string): string {
+// Links to another page are stored as `[Title](/page/<id>)` (see MentionMenu).
+// They render as in-app links instead of opening a new tab.
+const PAGE_LINK_RE = /^\/page\/([A-Za-z0-9_-]+)$/;
+
+export interface InlineOptions {
+  // Emoji shown before the text of a page link, when the page is known.
+  pageIcon?: (pageId: string) => string | undefined;
+  // Where a page link points. The shared view maps pages into the share
+  // (`/share/:token?p=id`) because the editor routes need a login.
+  pageHref?: (pageId: string) => string;
+}
+
+export function inlineMarkdownToHtml(text: string, opts: InlineOptions = {}): string {
   if (!text) return '';
   let out = escapeHtml(text);
 
@@ -58,6 +70,16 @@ export function inlineMarkdownToHtml(text: string): string {
   out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, linkText, url) => {
     const safe = safeHref(url);
     if (safe === null) return `[${linkText}](${url})`;
+    const pageMatch = PAGE_LINK_RE.exec(safe);
+    if (pageMatch) {
+      const pageId = pageMatch[1];
+      const href = escapeHtml(opts.pageHref?.(pageId) ?? safe);
+      const icon = opts.pageIcon?.(pageId);
+      const iconHtml = icon ? `<span class="inline-link-icon">${escapeHtml(icon)}</span>` : '';
+      return push(
+        `<a href="${href}" class="inline-link inline-link--page" data-page-id="${pageId}" data-url="${safe}" data-title="${linkText}">${iconHtml}${linkText}</a>`
+      );
+    }
     return push(
       `<a href="${safe}" target="_blank" rel="noopener noreferrer" class="inline-link" data-url="${safe}" data-title="${linkText}">${linkText}</a>`
     );

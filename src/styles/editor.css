@@ -1,0 +1,138 @@
+/* Editor extras: page mentions, shortcuts cheat sheet, lazy math fallback. */
+
+/* ---- Page links (`[Title](/page/<id>)`) ---- */
+.block-content a.inline-link--page,
+.readonly-block a.inline-link--page {
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.block-content a.inline-link--page:hover,
+.readonly-block a.inline-link--page:hover {
+  color: var(--text-primary);
+  filter: none;
+  background: var(--bg-hover);
+  border-bottom-color: var(--text-secondary);
+}
+.inline-link-icon {
+  margin-right: 0.25em;
+}
+
+/* ---- Mention picker (shares .slash-menu for position/background) ---- */
+.mention-menu {
+  width: 280px;
+}
+.mention-menu-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+.mention-menu-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Lazy KaTeX fallback ---- */
+.math-loading {
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* ---- Keyboard shortcuts cheat sheet ---- */
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+.shortcuts-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+.shortcuts-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.shortcuts-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.shortcuts-close:hover,
+.shortcuts-close:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.shortcuts-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 14px;
+}
+.shortcuts-group-title {
+  margin: 14px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+.shortcuts-keys {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+.shortcuts-key {
+  min-width: 22px;
+  padding: 2px 6px;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}

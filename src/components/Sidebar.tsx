@@ -19,19 +19,21 @@ import {
   MoreHorizontalIcon,
   SunIcon,
   MoonIcon,
+  TrashIcon,
 } from './Icons';
+import { StarIcon, StarFilledIcon, DuplicateIcon } from './PageIcons';
 import { useTheme } from '../contexts/ThemeContext';
 import { Logo } from './Logo';
 import { WorkspaceSettings } from './WorkspaceSettings';
 import { UserMenuPopover } from './UserMenuPopover';
 import { IconColorPickerModal } from './IconColorPickerModal';
 import { ApiTokenModal } from './ApiTokenModal';
-import { ConfirmDialog } from './ConfirmDialog';
 import { ImportModal } from './ImportModal';
+import { ContextMenu, ContextMenuItem } from './ContextMenu';
+import { TrashModal } from './TrashModal';
+import { TrashToast } from './TrashToast';
 import {
   getRecentPages,
-  getProjectIds,
-  addProject,
   STORAGE_EVENTS,
   RecentPageItem,
 } from '../utils/workspaceStorage';
@@ -124,49 +126,6 @@ function computeZone(clientY: number, rect: DOMRect): DropZone {
   return 'center';
 }
 
-// Build the cascade-count description for the delete confirm. Uses native JSX
-// (not dangerouslySetInnerHTML) so a malicious page title can't inject HTML.
-// Singular/plural handled with {one}|{other} keys to avoid a CLDR dependency.
-function buildDeleteDescription(
-  cascade: { pages: number; blocks: number },
-  t: (k: string, vars?: Record<string, string | number>) => string
-) {
-  const subCount = Math.max(0, cascade.pages - 1);
-  const blkCount = cascade.blocks;
-  if (subCount > 0 && blkCount > 0) {
-    return (
-      <>
-        <>{t('sidebar.deleteDesc.bothPrefix')} </>{' '}
-        <strong>{subCount}</strong>{' '}
-        {subCount === 1 ? t('sidebar.deleteDesc.sub_one') : t('sidebar.deleteDesc.sub_other')}
-        {' '}{t('sidebar.deleteDesc.and')}{' '}
-        <strong>{blkCount}</strong>{' '}
-        {blkCount === 1 ? t('sidebar.deleteDesc.blk_one') : t('sidebar.deleteDesc.blk_other')}
-        {t('sidebar.deleteDesc.dot')}
-      </>
-    );
-  }
-  if (subCount > 0 && blkCount === 0) {
-    return (
-      <>
-        {t('sidebar.deleteDesc.subPrefix')} <strong>{subCount}</strong>{' '}
-        {subCount === 1 ? t('sidebar.deleteDesc.nestedSub_one') : t('sidebar.deleteDesc.nestedSub_other')}
-        {t('sidebar.deleteDesc.dot')}
-      </>
-    );
-  }
-  if (subCount === 0 && blkCount > 0) {
-    return (
-      <>
-        {t('sidebar.deleteDesc.blkPrefix')} <strong>{blkCount}</strong>{' '}
-        {blkCount === 1 ? t('sidebar.deleteDesc.fromBlk_one') : t('sidebar.deleteDesc.fromBlk_other')}
-        {t('sidebar.deleteDesc.dot')}
-      </>
-    );
-  }
-  return <>{t('sidebar.deleteDesc.empty')}</>;
-}
-
 type PageTreeItemProps = {
   page: Page;
   level?: number;
@@ -178,16 +137,21 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
   const isParentOfActive = hasDescendant(page, currentId);
   const [manuallyExpanded, setManuallyExpanded] = React.useState<boolean | null>(null);
   const expanded = manuallyExpanded !== null ? manuallyExpanded : isParentOfActive;
+  const itemRef = useRef<HTMLDivElement | null>(null);
+
+  // Navigating to a descendant (breadcrumb, link, search) must reveal it even if
+  // the user previously collapsed this node by hand.
+  useEffect(() => {
+    if (isParentOfActive) setManuallyExpanded(null);
+  }, [isParentOfActive, currentId]);
 
   const navigate = useNavigate();
-  const { deletePage, createPage, refreshPages, updatePage, pages: flatPages } = usePageContext();
+  const { deletePage, createPage, refreshPages, updatePage, duplicatePage, toggleFavorite, pages: flatPages } = usePageContext();
   const { t } = useLanguage();
   const { state: dragState, setState: setDragState } = useDragState();
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [cascade, setCascade] = useState<{ pages: number; blocks: number } | null>(null);
-  const [cascadeLoading, setCascadeLoading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // Page actions menu (the "..." button or a right click on the row).
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   const isActive = currentId === page.id;
   const hasChildren = !!(page.children && page.children.length > 0);
@@ -216,31 +180,57 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
     setManuallyExpanded(prev => !(prev ?? expanded));
   }, [expanded]);
 
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmOpen(true);
-    setCascade(null);
-    setCascadeLoading(true);
-    api.pages.cascadeCount(page.id)
-      .then((c) => setCascade(c))
-      .catch(() => setCascade({ pages: 1, blocks: 0 }))
-      .finally(() => setCascadeLoading(false));
-  }, [page.id]);
+  const openMenuAt = useCallback((x: number, y: number) => setMenuPos({ x, y }), []);
 
-  const handleConfirmDelete = useCallback(async () => {
-    setDeleting(true);
+  const handleMenuButton = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    openMenuAt(rect.left, rect.bottom + 4);
+  }, [openMenuAt]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openMenuAt(e.clientX, e.clientY);
+  }, [openMenuAt]);
+
+  // Deleting only moves the page to Trash, so there is no confirm step: the
+  // toast offers Undo and the Trash view restores it later.
+  const handleMoveToTrash = useCallback(async () => {
     try {
       await deletePage(page.id);
-      await refreshPages();
-      if (currentId === page.id) {
-        navigate('/');
-      }
-      setConfirmOpen(false);
     } catch (err) {
-      console.error('Failed to delete page', err);
-      setDeleting(false);
+      console.error('Failed to move page to trash', err);
     }
-  }, [deletePage, refreshPages, currentId, page.id, navigate]);
+  }, [deletePage, page.id]);
+
+  const handleDuplicate = useCallback(async () => {
+    try {
+      await duplicatePage(page.id);
+    } catch (err) {
+      console.error('Failed to duplicate page', err);
+    }
+  }, [duplicatePage, page.id]);
+
+  const menuItems: ContextMenuItem[] = [
+    {
+      label: page.is_favorite ? t('favorites.remove') : t('favorites.add'),
+      icon: page.is_favorite ? <StarFilledIcon size={14} /> : <StarIcon size={14} />,
+      onClick: () => { toggleFavorite(page.id).catch(err => console.error('Failed to update favorite', err)); },
+    },
+    {
+      label: t('page.duplicate'),
+      icon: <DuplicateIcon size={14} />,
+      onClick: handleDuplicate,
+    },
+    { divider: true },
+    {
+      label: t('page.moveToTrash'),
+      icon: <TrashIcon size={14} />,
+      danger: true,
+      onClick: handleMoveToTrash,
+    },
+  ];
 
   const handleAddChild = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -400,9 +390,17 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
     setDragState({ draggingId: null, overId: null, zone: null });
   }, [setDragState]);
 
+  // Keep the active item visible inside .page-list. No smooth scrolling so the
+  // first load does not animate; 'nearest' avoids moving when already visible.
+  const isActiveItem = currentId === page.id;
+  useEffect(() => {
+    if (isActiveItem) itemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isActiveItem]);
+
   if (collapsed) {
     return (
       <div
+        ref={itemRef}
         className={`page-item page-item--collapsed ${isActive ? 'active' : ''} ${isDragging ? 'page-item--dragging' : ''}`}
         draggable
         onDragStart={handleDragStart}
@@ -430,6 +428,7 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
   return (
     <div>
       <div
+        ref={itemRef}
         className={itemClass}
         draggable
         onDragStart={handleDragStart}
@@ -438,6 +437,7 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
         onDrop={handleDrop}
         onDragEnd={handleDragEnd}
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
         <div
           className="toggle-btn"
@@ -454,8 +454,8 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
           <button className="icon-btn" onClick={handleAddChild} title={t('sidebar.addPageInside')} aria-label={t('sidebar.addPageInside')}>
             <PlusIcon size={16} />
           </button>
-          <button className="icon-btn" onClick={handleDelete} title={t('sidebar.delete')} aria-label={t('sidebar.delete')}>
-            <XIcon size={16} />
+          <button className="icon-btn" onClick={handleMenuButton} title={t('page.moreActions')} aria-label={t('page.moreActions')} aria-haspopup="menu">
+            <MoreHorizontalIcon size={16} />
           </button>
         </div>
       </div>
@@ -468,22 +468,14 @@ const PageTreeItem = memo(function PageTreeItem({ page, level = 0, collapsed }: 
         </div>
       )}
 
-      <ConfirmDialog
-        open={confirmOpen}
-        title={t('sidebar.confirmDeleteTitleWithTitle', { title: page.title || t('sidebar.untitledPage') })}
-        description={
-          cascadeLoading
-            ? t('sidebar.deleteCalculating')
-            : cascade
-              ? <>{buildDeleteDescription(cascade, t)} <>{t('sidebar.deleteDesc.irreversible')}</></>
-              : t('sidebar.deleteFallback')
-        }
-        confirmLabel={t('dialog.delete')}
-        confirmTone="danger"
-        loading={deleting}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => { if (!deleting) setConfirmOpen(false); }}
-      />
+      {menuPos && (
+        <ContextMenu
+          x={menuPos.x}
+          y={menuPos.y}
+          items={menuItems}
+          onClose={() => setMenuPos(null)}
+        />
+      )}
     </div>
   );
 });
@@ -503,6 +495,7 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
   } = useSidebar();
   const { t } = useLanguage();
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const workspaceHeaderRef = useRef<HTMLDivElement | null>(null);
   const userAnchorRef = useRef<HTMLDivElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -558,21 +551,14 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
     e.dataTransfer.dropEffect = 'move';
   }, [dragState.draggingId]);
 
-  // Local state for recents and projects (100% frontend).
+  // Recents are per device (localStorage); projects and favorites come from
+  // the pages themselves so they are the same on every device.
   const [recentPages, setRecentPages] = useState<RecentPageItem[]>(() => getRecentPages());
-  const [projectIds, setProjectIds] = useState<string[]>(() => getProjectIds());
 
   useEffect(() => {
     const updateRecents = () => setRecentPages(getRecentPages());
-    const updateProjects = () => setProjectIds(getProjectIds());
-
     window.addEventListener(STORAGE_EVENTS.RECENTS_CHANGED, updateRecents);
-    window.addEventListener(STORAGE_EVENTS.PROJECTS_CHANGED, updateProjects);
-
-    return () => {
-      window.removeEventListener(STORAGE_EVENTS.RECENTS_CHANGED, updateRecents);
-      window.removeEventListener(STORAGE_EVENTS.PROJECTS_CHANGED, updateProjects);
-    };
+    return () => window.removeEventListener(STORAGE_EVENTS.RECENTS_CHANGED, updateRecents);
   }, []);
 
   // Filter out recents pointing to deleted pages.
@@ -582,12 +568,16 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
 
   // Split the tree into Projects and Private sections.
   const projectTree = useMemo(() => {
-    return tree.filter(p => projectIds.includes(p.id));
-  }, [tree, projectIds]);
+    return tree.filter(p => p.is_project);
+  }, [tree]);
 
   const privateTree = useMemo(() => {
-    return tree.filter(p => !projectIds.includes(p.id));
-  }, [tree, projectIds]);
+    return tree.filter(p => !p.is_project);
+  }, [tree]);
+
+  const favoritePages = useMemo(() => {
+    return pages.filter(p => p.is_favorite);
+  }, [pages]);
 
   useEffect(() => {
     if (isMobile) closeMobile();
@@ -598,8 +588,7 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
   const handleCreateProject = useCallback(async () => {
     try {
       const newPage = await createPage(null);
-      addProject(newPage.id);
-      await updatePage(newPage.id, { icon: '', title: 'New Project' });
+      await updatePage(newPage.id, { icon: '', title: 'New Project', is_project: true });
       await refreshPages();
       navigate(`/page/${newPage.id}`);
     } catch (err) {
@@ -733,6 +722,31 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
 
         {/* Structured list: Recents, Projects, Private */}
         <div className="page-list">
+          {/* SECTION 0: FAVORITES (only when there is at least one) */}
+          {!collapsed && favoritePages.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-header">
+                <span className="sidebar-section-title">{t('favorites.title')}</span>
+              </div>
+              <div className="sidebar-recents-list">
+                {favoritePages.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`sidebar-recent-item ${currentId === item.id ? 'active' : ''}`}
+                    onClick={() => navigate(`/page/${item.id}`)}
+                    role="button"
+                    title={item.title}
+                  >
+                    {item.icon
+                      ? <span className="sidebar-recent-icon">{item.icon}</span>
+                      : <DocumentIcon size={14} />}
+                    <span className="sidebar-recent-title">{item.title || t('sidebar.untitledPage')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* SECTION 1: RECENTS */}
           {!collapsed && validRecents.length > 0 && (
             <div className="sidebar-section">
@@ -837,6 +851,18 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
           )}
         </div>
 
+        {/* Trash entry, pinned above the footer */}
+        {!collapsed && (
+          <button
+            type="button"
+            className="sidebar-trash-row"
+            onClick={() => setTrashOpen(true)}
+          >
+            <TrashIcon size={15} />
+            <span>{t('trash.title')}</span>
+          </button>
+        )}
+
         {/* Footer: Profile + Theme toggle */}
         {!collapsed && (
           <div className="sidebar-footer">
@@ -899,6 +925,14 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
         {collapsed && (
           <div className="sidebar-footer sidebar-footer--collapsed">
             <button
+              className="sidebar-btn"
+              onClick={() => setTrashOpen(true)}
+              title={t('trash.title')}
+              aria-label={t('trash.title')}
+            >
+              <TrashIcon size={16} />
+            </button>
+            <button
               className="sidebar-btn sidebar-btn--user"
               onClick={() => setUserMenuOpen(prev => !prev)}
               title={username || 'User'}
@@ -948,6 +982,9 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
         open={apiTokenOpen}
         onClose={() => setApiTokenOpen(false)}
       />
+
+      <TrashModal open={trashOpen} onClose={() => setTrashOpen(false)} />
+      <TrashToast />
 
       <ImportModal
         open={importModalOpen}

@@ -1,5 +1,6 @@
-// Local storage utilities for Markflare (100% frontend). Keeps changes out
-// of the backend so we don't drift from the git repo.
+// Local storage utilities for Markflare. Only per-device state lives here
+// (recent pages); everything that should follow the user across devices is
+// stored with the page in the database.
 
 export interface RecentPageItem {
   id: string;
@@ -17,8 +18,6 @@ const STORAGE_KEYS = {
 // Custom events for cross-component reactivity.
 export const STORAGE_EVENTS = {
   RECENTS_CHANGED: 'markflare:recents_changed',
-  PROJECTS_CHANGED: 'markflare:projects_changed',
-  COVERS_CHANGED: 'markflare:covers_changed',
 };
 
 function dispatchChange(eventName: string) {
@@ -82,94 +81,41 @@ export function clearRecentPages() {
   }
 }
 
-// Projects
+// Legacy projects / covers
+//
+// Projects and covers used to live only in this browser's localStorage, so they
+// never followed the user to another device. They are now columns on the page
+// (`is_project`, `cover`). These helpers only read the old keys once so the
+// page provider can upload them to the server, then drop them.
 
-export function getProjectIds(): string[] {
+export interface LegacyPageSettings {
+  projects: string[];
+  covers: Record<string, string>;
+}
+
+export function readLegacyPageSettings(): LegacyPageSettings | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : [];
+    const rawProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+    const rawCovers = localStorage.getItem(STORAGE_KEYS.COVERS);
+    if (rawProjects === null && rawCovers === null) return null;
+
+    const projects = rawProjects ? JSON.parse(rawProjects) : [];
+    const covers = rawCovers ? JSON.parse(rawCovers) : {};
+    return {
+      projects: Array.isArray(projects) ? projects.filter((id): id is string => typeof id === 'string') : [],
+      covers: covers && typeof covers === 'object' && !Array.isArray(covers) ? covers : {},
+    };
   } catch (e) {
-    console.error('Read projects error:', e);
-    return [];
+    console.error('Read legacy page settings error:', e);
+    return null;
   }
 }
 
-export function isProject(pageId: string): boolean {
-  if (!pageId) return false;
-  const ids = getProjectIds();
-  return ids.includes(pageId);
-}
-
-export function addProject(pageId: string) {
-  if (!pageId) return;
+export function clearLegacyPageSettings() {
   try {
-    const ids = getProjectIds();
-    if (!ids.includes(pageId)) {
-      ids.push(pageId);
-      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(ids));
-      dispatchChange(STORAGE_EVENTS.PROJECTS_CHANGED);
-    }
+    localStorage.removeItem(STORAGE_KEYS.PROJECTS);
+    localStorage.removeItem(STORAGE_KEYS.COVERS);
   } catch (e) {
-    console.error('Add project error:', e);
-  }
-}
-
-export function removeProject(pageId: string) {
-  if (!pageId) return;
-  try {
-    const ids = getProjectIds().filter(id => id !== pageId);
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(ids));
-    dispatchChange(STORAGE_EVENTS.PROJECTS_CHANGED);
-  } catch (e) {
-    console.error('Remove project error:', e);
-  }
-}
-
-export function toggleProject(pageId: string): boolean {
-  if (!pageId) return false;
-  if (isProject(pageId)) {
-    removeProject(pageId);
-    return false;
-  } else {
-    addProject(pageId);
-    return true;
-  }
-}
-
-// Covers
-
-export function getAllPageCovers(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.COVERS);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch (e) {
-    console.error('Read covers error:', e);
-    return {};
-  }
-}
-
-export function getPageCover(pageId: string): string | null {
-  if (!pageId) return null;
-  const covers = getAllPageCovers();
-  return covers[pageId] || null;
-}
-
-export function setPageCover(pageId: string, cover: string | null) {
-  if (!pageId) return;
-  try {
-    const covers = getAllPageCovers();
-    if (cover) {
-      covers[pageId] = cover;
-    } else {
-      delete covers[pageId];
-    }
-    localStorage.setItem(STORAGE_KEYS.COVERS, JSON.stringify(covers));
-    dispatchChange(STORAGE_EVENTS.COVERS_CHANGED);
-  } catch (e) {
-    console.error('Save cover error:', e);
+    console.error('Clear legacy page settings error:', e);
   }
 }

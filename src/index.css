@@ -89,6 +89,7 @@ body {
 .layout {
   display: flex;
   height: 100vh;
+  height: 100dvh;
 }
 
 .main-content {
@@ -104,6 +105,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   transition: width 0.2s ease;
 }
 

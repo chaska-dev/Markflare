@@ -1,0 +1,360 @@
+/* Page-level features: trash, favorites, full-width layout. */
+
+/* ---- Full width ----
+   index.css caps .page-view at 900px. In full-width mode the column grows with
+   the window; the side padding stays so text never touches the edges. */
+.page-view--full-width {
+  max-width: none;
+}
+
+.page-action-btn--active {
+  color: var(--accent) !important;
+  border-color: rgba(243, 128, 32, 0.4) !important;
+  background: rgba(243, 128, 32, 0.1) !important;
+}
+
+/* Icon-only buttons in .page-actions keep the same height as labelled ones. */
+.page-action-btn--icon {
+  padding: 5px 7px;
+}
+
+/* ---- Trash banner (page opened while it is in Trash) ---- */
+.trash-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 20px;
+  padding: 10px 14px;
+  border: 1px solid rgba(235, 87, 87, 0.35);
+  border-radius: 6px;
+  background: rgba(235, 87, 87, 0.08);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.trash-banner-text {
+  flex: 1;
+  min-width: 160px;
+}
+
+.trash-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.trash-banner-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.trash-banner-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.trash-banner-btn--danger {
+  color: var(--danger);
+  border-color: rgba(235, 87, 87, 0.4);
+}
+
+/* Read-only preview of a trashed page's content. */
+.trash-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 24px;
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: text;
+}
+
+.page-title--readonly {
+  cursor: default;
+}
+
+/* ---- Sidebar: favorites ---- */
+.sidebar-favorite-star {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+/* ---- Sidebar: trash entry ---- */
+.sidebar-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 4px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sidebar-trash-row:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---- Trash modal ---- */
+.trash-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Below .confirm-backdrop (1000) so "Delete forever" confirms on top. */
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.trash-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(560px, 85vh);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-elevated, var(--bg-primary));
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.trash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+}
+
+.trash-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trash-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.trash-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.trash-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-tertiary);
+}
+
+.trash-search:focus-within {
+  border-color: var(--accent);
+}
+
+.trash-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13.5px;
+}
+
+.trash-error {
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(235, 87, 87, 0.1);
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.trash-list {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+
+.trash-empty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.trash-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.trash-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.trash-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+}
+
+.trash-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-item-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.trash-item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.trash-item-btn:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.trash-item-btn--danger:hover:not(:disabled) {
+  background: rgba(235, 87, 87, 0.14);
+  color: var(--danger);
+}
+
+.trash-item-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.trash-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.trash-hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.trash-empty-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(235, 87, 87, 0.4);
+  border-radius: 4px;
+  background: none;
+  color: var(--danger);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.trash-empty-btn:hover:not(:disabled) {
+  background: rgba(235, 87, 87, 0.1);
+}
+
+.trash-empty-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- "Moved to Trash · Undo" toast ---- */
+.trash-toast {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-elevated, var(--bg-primary));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.trash-toast-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-toast-undo {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trash-toast-undo:hover {
+  background: rgba(243, 128, 32, 0.12);
+}

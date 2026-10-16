@@ -1,0 +1,236 @@
+/* Uploads and media blocks: upload placeholders, progress, lightbox. */
+
+/* ---- Upload progress / error strip (image + file blocks) ---- */
+.upload-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.upload-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.upload-status-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.upload-bar {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-secondary) 25%, transparent);
+}
+
+.upload-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+
+/* Nothing sent yet (waiting or compressing): a sliding segment instead of 0%. */
+.upload-bar--indeterminate .upload-bar-fill {
+  position: absolute;
+  width: 40%;
+  animation: upload-bar-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes upload-bar-slide {
+  from { left: -40%; }
+  to { left: 100%; }
+}
+
+.upload-status-icon-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.upload-status-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.upload-status--error {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--danger);
+}
+
+.upload-status--error .upload-status-text {
+  flex: 1 1 140px;
+}
+
+.upload-status-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.upload-status-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border-color, #2a2a32);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.upload-status-btn:hover {
+  background: var(--bg-hover);
+}
+
+.upload-status-btn--primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Image block while uploading ---- */
+.block-image--upload {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.block-image--upload img {
+  align-self: center;
+}
+
+.block-image--upload img.is-uploading {
+  opacity: 0.6;
+}
+
+.block-image--upload img.is-failed {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.block-image--upload .upload-status {
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--bg-primary, #111) 82%, transparent);
+  border-radius: 0 0 8px 8px;
+}
+
+/* ---- File block while uploading ---- */
+.block-file--upload {
+  flex-wrap: wrap;
+  min-width: min(100%, 320px);
+}
+
+.block-file--upload .upload-status {
+  flex: 1 1 100%;
+}
+
+.block-file-size {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+}
+
+/* ---- Empty image placeholder is clickable ---- */
+.block-image-placeholder--action {
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.block-image-placeholder--action:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+/* ---- Click to zoom ---- */
+.media-zoomable,
+.media-zoom-btn img {
+  cursor: zoom-in;
+}
+
+/* Wraps the read-only image so keyboard users can open the viewer. */
+.media-zoom-btn {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  line-height: 0;
+  cursor: zoom-in;
+}
+
+.media-zoom-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.media-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.85);
+  overscroll-behavior: contain;
+  cursor: zoom-out;
+}
+
+.media-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.media-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+}
+
+.media-lightbox-close:hover,
+.media-lightbox-close:focus-visible {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.media-lightbox-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-bar--indeterminate .upload-bar-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}

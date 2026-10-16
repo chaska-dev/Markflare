@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Block } from '../types';
+import { useScrollContainer } from '../hooks/useScrollContainer';
 
 interface Props {
   blocks: Block[];
@@ -18,6 +19,7 @@ export function DocumentOutline({ blocks }: Props) {
   const [hoveredHeading, setHoveredHeading] = useState<HeadingItem | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number } | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useScrollContainer();
 
   // Filter and normalize headings.
   const headings: HeadingItem[] = useMemo(() => {
@@ -42,7 +44,7 @@ export function DocumentOutline({ blocks }: Props) {
   useEffect(() => {
     if (headings.length === 0) return;
 
-    const scrollContainer = document.querySelector('.main-content');
+    const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
 
     const handleScroll = () => {
@@ -76,7 +78,7 @@ export function DocumentOutline({ blocks }: Props) {
     return () => {
       scrollContainer.removeEventListener('scroll', handleScroll);
     };
-  }, [headings]);
+  }, [headings, scrollContainerRef]);
 
   // Hide the rail for short notes (less than 2 headings) to avoid clutter.
   if (headings.length < 2) {
@@ -85,7 +87,7 @@ export function DocumentOutline({ blocks }: Props) {
 
   const handleScrollTo = (id: string) => {
     const el = document.getElementById(`block-${id}`);
-    const scrollContainer = document.querySelector('.main-content');
+    const scrollContainer = scrollContainerRef.current;
 
     if (el && scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();
