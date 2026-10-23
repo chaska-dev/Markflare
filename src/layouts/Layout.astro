@@ -1,0 +1,107 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  lang?: 'es' | 'en';
+}
+
+const {
+  title,
+  description = 'A self-hosted, block-based note-taking workspace on Cloudflare Pages + D1. Infinite pages, KaTeX formulas, code blocks, and dual theme.',
+  lang = 'es',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang={lang} data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content="/public/logo.svg" />
+
+    <!-- Prevent theme flash script (executed before body paint) -->
+    <script is:inline>
+      (function () {
+        try {
+          const savedTheme = localStorage.getItem('markflare_theme');
+          if (savedTheme === 'light' || savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+          } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            document.documentElement.setAttribute('data-theme', 'light');
+          } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          }
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+
+    <!-- Global interactive script for theme toggle and copy buttons -->
+    <script>
+      // Theme toggle handler
+      function initThemeToggle() {
+        const toggleButtons = document.querySelectorAll('.theme-toggle-btn');
+        toggleButtons.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', nextTheme);
+            try {
+              localStorage.setItem('markflare_theme', nextTheme);
+            } catch (e) {
+              console.error(e);
+            }
+          });
+        });
+      }
+
+      // Clipboard copy handler
+      function initCopyButtons() {
+        const copyButtons = document.querySelectorAll('[data-copy-target]');
+        copyButtons.forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const textToCopy = btn.getAttribute('data-copy-target');
+            if (!textToCopy) return;
+
+            try {
+              await navigator.clipboard.writeText(textToCopy);
+              const originalText = btn.innerHTML;
+              btn.setAttribute('data-copied', 'true');
+              btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--success);"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>¡Copiado!</span>
+              `;
+              setTimeout(() => {
+                btn.removeAttribute('data-copied');
+                btn.innerHTML = originalText;
+              }, 2000);
+            } catch (err) {
+              console.error('Copy failed', err);
+            }
+          });
+        });
+      }
+
+      // Initialize on load and on view transitions if any
+      document.addEventListener('DOMContentLoaded', () => {
+        initThemeToggle();
+        initCopyButtons();
+      });
+    </script>
+  </body>
+</html>

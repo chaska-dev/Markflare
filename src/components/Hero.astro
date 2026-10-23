@@ -1,0 +1,382 @@
+---
+import InteractiveEditorPreview from './InteractiveEditorPreview.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  lang?: 'es' | 'en';
+}
+
+const { lang = 'es' } = Astro.props;
+const isEs = lang === 'es';
+---
+
+<section class="hero-section">
+  <!-- Ambient background glow behind hero -->
+  <div class="hero-bg-glow" aria-hidden="true"></div>
+
+  <div class="container hero-container">
+    <!-- Top Announcement Badge -->
+    <div class="hero-badge-wrapper">
+      <div class="badge badge-accent">
+        <span class="badge-dot"></span>
+        <span>{isEs ? 'v1.0.0 — Auto-hospedado en Cloudflare Pages + D1' : 'v1.0.0 — Self-hosted on Cloudflare Pages + D1'}</span>
+      </div>
+    </div>
+
+    <!-- Main Headline & Subtitle -->
+    <h1 class="hero-title">
+      {isEs ? (
+        <>Tus notas por bloques en el <span class="accent-text">edge de Cloudflare</span></>
+      ) : (
+        <>Block-based notes on the <span class="accent-text">Cloudflare edge</span></>
+      )}
+    </h1>
+
+    <p class="hero-subtitle">
+      {isEs
+        ? 'Un espacio de trabajo auto-hospedado estilo Notion. Páginas, subpáginas infinitas, tareas, fórmulas matemáticas KaTeX, bloques de código, tablas y enlaces de compartir públicos. Sin servidores que mantener, sin bases de datos pesadas y con coste prácticamente nulo.'
+        : 'A self-hosted, block-based note-taking workspace. Infinite pages, todos, KaTeX math formulas, code blocks, tables, and granular public share links. Zero server maintenance, zero bulky database engines, and runs completely in the Cloudflare free tier.'}
+    </p>
+
+    <!-- CTAs and Terminal Clone Bar -->
+    <div class="hero-cta-group">
+      <a
+        href="https://github.com/Chaska-dev/Markflare/archive/refs/heads/main.zip"
+        class="btn btn-primary btn-lg"
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>{isEs ? 'Descargar ZIP (v1.0.0)' : 'Download ZIP (v1.0.0)'}</span>
+      </a>
+
+      <a
+        href="https://github.com/Chaska-dev/Markflare"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-secondary btn-lg"
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+        </svg>
+        <span>{isEs ? 'Ver en GitHub' : 'View on GitHub'}</span>
+      </a>
+
+      <!-- Quick Clone Snippet -->
+      <div class="clone-box">
+        <span class="clone-prompt">$</span>
+        <code class="clone-cmd">git clone https://github.com/Chaska-dev/Markflare.git</code>
+        <button
+          type="button"
+          class="clone-copy-btn"
+          data-copy-target="git clone https://github.com/Chaska-dev/Markflare.git"
+          title={isEs ? 'Copiar comando de clonación' : 'Copy clone command'}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Value Highlights / Architecture Pillars -->
+    <div class="hero-pillars">
+      <div class="pillar-item">
+        <Icon name="zap" class="pillar-icon" size={18} />
+        <div class="pillar-content">
+          <strong>Cloudflare Pages + D1 + R2</strong>
+        </div>
+      </div>
+      <div class="pillar-item">
+        <Icon name="lock" class="pillar-icon" size={18} />
+        <div class="pillar-content">
+          <strong>{isEs ? 'Seguridad Monousuario' : 'Single-User Security'}</strong>
+        </div>
+      </div>
+      <div class="pillar-item">
+        <Icon name="globe" class="pillar-icon" size={18} />
+        <div class="pillar-content">
+          <strong>{isEs ? 'UI Bilingüe & Tema Dual' : 'Bilingual & Dual Theme'}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Workspace Showcase (The memorable center) -->
+    <div class="hero-preview-wrapper">
+      <!-- Glow effect behind the app frame -->
+      <div class="preview-ambient-glow" aria-hidden="true"></div>
+      <div class="preview-grid-backdrop" aria-hidden="true"></div>
+
+      <!-- Interactive hint pill -->
+      <div class="preview-interactive-badge">
+        <span class="pulse-dot"></span>
+        <span>{isEs ? 'Espacio de trabajo interactivo — Haz clic en "Cambiar portada", tareas o notas del árbol' : 'Interactive workspace — Click "Change cover", todos, or page tree items'}</span>
+      </div>
+
+      <InteractiveEditorPreview lang={lang} />
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero-section {
+    padding-top: 50px;
+    padding-bottom: 70px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Ambient radial gradient background */
+  .hero-bg-glow {
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 400px;
+    background: radial-gradient(
+      ellipse at 50% 30%,
+      rgba(243, 128, 32, 0.15) 0%,
+      rgba(243, 128, 32, 0.03) 50%,
+      transparent 75%
+    );
+    filter: blur(60px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hero-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-badge-wrapper {
+    margin-bottom: 20px;
+  }
+
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent);
+  }
+
+  .hero-title {
+    font-size: 38px;
+    font-weight: 700;
+    max-width: 860px;
+    margin-bottom: 18px;
+    letter-spacing: -0.03em;
+  }
+
+  @media (min-width: 768px) {
+    .hero-title {
+      font-size: 54px;
+      line-height: 1.15;
+    }
+  }
+
+  .accent-text {
+    color: var(--accent);
+    background: linear-gradient(135deg, #F38020 0%, #FAAD3F 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-subtitle {
+    font-size: 17px;
+    max-width: 760px;
+    margin-bottom: 32px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  @media (min-width: 768px) {
+    .hero-subtitle {
+      font-size: 18px;
+    }
+  }
+
+  .hero-cta-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 44px;
+  }
+
+  .clone-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-code);
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+
+  .clone-prompt {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .clone-cmd {
+    color: var(--text-primary);
+  }
+
+  .clone-copy-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border-radius: 3px;
+    transition: color 0.15s ease;
+  }
+
+  .clone-copy-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .hero-pillars {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    max-width: 900px;
+    width: 100%;
+    margin-bottom: 46px;
+    text-align: left;
+  }
+
+  @media (min-width: 820px) {
+    .hero-pillars {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .pillar-item {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: border-color 0.15s;
+  }
+
+  .pillar-item:hover {
+    border-color: rgba(243, 128, 32, 0.3);
+  }
+
+  .pillar-icon {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    transition: color 0.15s;
+  }
+
+  .pillar-item:hover .pillar-icon {
+    color: var(--text-primary);
+  }
+
+  .pillar-content {
+    display: flex;
+    flex-direction: column;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+
+  .pillar-content strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .pillar-content span {
+    color: var(--text-tertiary);
+    font-size: 11.5px;
+  }
+
+  /* Live Preview Wrapper & Lighting */
+  .hero-preview-wrapper {
+    width: 100%;
+    position: relative;
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .preview-ambient-glow {
+    position: absolute;
+    top: 25%;
+    left: 50%;
+    transform: translate(-50%, -20%);
+    width: 90%;
+    max-width: 900px;
+    height: 480px;
+    background: radial-gradient(
+      ellipse at 50% 50%,
+      rgba(243, 128, 32, 0.2) 0%,
+      rgba(243, 128, 32, 0.05) 50%,
+      transparent 75%
+    );
+    filter: blur(70px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .preview-grid-backdrop {
+    position: absolute;
+    inset: -30px -20px;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse 65% 55% at 50% 50%, black 25%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 50%, black 25%, transparent 75%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .preview-interactive-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    background: rgba(243, 128, 32, 0.08);
+    border: 1px solid rgba(243, 128, 32, 0.25);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    z-index: 2;
+    position: relative;
+    user-select: none;
+  }
+
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s infinite ease-in-out;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+</style>

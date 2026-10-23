@@ -1,0 +1,237 @@
+---
+interface Props {
+  lang?: 'es' | 'en';
+}
+
+const { lang = 'es' } = Astro.props;
+const isEs = lang === 'es';
+---
+
+<footer class="footer">
+  <div class="container footer-container">
+    <div class="footer-brand">
+      <div class="footer-logo">
+        <svg
+          width="22"
+          height="24"
+          viewBox="160 75 136 148"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M174.249 116.228L228.059 148.013V212.699L174.249 180.356V116.228Z" fill="#42474C" />
+          <path d="M228.059 148.013L281.869 116.228V180.356L228.059 212.699V148.013Z" fill="#353B41" />
+          <path d="M228.059 85L281.869 116.228L228.059 148.013L174.249 116.228L228.059 85Z" fill="#F38020" />
+          <path d="M174.249 116.228V180.356L228.059 212.699L281.869 180.356V116.228" stroke="#F7F9F9" stroke-width="5" stroke-linejoin="round" />
+          <path d="M228.059 85L281.869 116.228L228.059 148.013L174.249 116.228L228.059 85Z" stroke="#E8FCF7" stroke-width="4" stroke-linejoin="round" />
+        </svg>
+        <span class="footer-name">mark<span class="accent-text">flare</span></span>
+      </div>
+      <p class="footer-tagline">
+        {isEs
+          ? 'Espacio de trabajo de notas por bloques auto-hospedado sobre Cloudflare Pages + D1.'
+          : 'A self-hosted, block-based note-taking workspace on Cloudflare Pages + D1.'}
+      </p>
+      <div class="footer-license">
+        <span>MIT License · Open Source</span>
+      </div>
+    </div>
+
+    <!-- Navigation Columns -->
+    <div class="footer-links-grid">
+      <div class="footer-col">
+        <span class="col-title">{isEs ? 'Recursos' : 'Resources'}</span>
+        <a href="#features" class="footer-link">{isEs ? 'Características' : 'Features'}</a>
+        <a href="#architecture" class="footer-link">{isEs ? 'Arquitectura' : 'Architecture'}</a>
+        <a href="#screenshots" class="footer-link">{isEs ? 'La interfaz' : 'The interface'}</a>
+        <a href="#storage" class="footer-link">{isEs ? 'Archivos en R2' : 'Files in R2'}</a>
+        <a href="#deploy" class="footer-link">{isEs ? '5 Métodos de Despliegue' : '5 Deployment Methods'}</a>
+        <a href="#migrations" class="footer-link">{isEs ? 'Migraciones SQL' : 'SQL Migrations'}</a>
+        <a href="#api" class="footer-link">API REST</a>
+      </div>
+
+      <div class="footer-col">
+        <span class="col-title">{isEs ? 'Comunidad & Código' : 'Community & Code'}</span>
+        <a
+          href="https://github.com/Chaska-dev/Markflare"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          GitHub Repository
+        </a>
+        <a
+          href="https://github.com/Chaska-dev/Markflare/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          {isEs ? 'Reportar Issue' : 'Issues & Bugs'}
+        </a>
+        <a
+          href="https://github.com/Chaska-dev/Markflare/archive/refs/heads/main.zip"
+          class="footer-link"
+        >
+          {isEs ? 'Descargar ZIP (v1.0.0)' : 'Download ZIP (v1.0.0)'}
+        </a>
+      </div>
+
+      <div class="footer-col">
+        <span class="col-title">Cloudflare Stack</span>
+        <a
+          href="https://developers.cloudflare.com/pages/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          Cloudflare Pages
+        </a>
+        <a
+          href="https://developers.cloudflare.com/d1/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          Cloudflare D1 (SQL)
+        </a>
+        <a
+          href="https://hono.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+        >
+          Hono Router
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container footer-bottom">
+    <span class="copyright">
+      © {new Date().getFullYear()} Markflare. {isEs ? 'Creado por la comunidad con licencia MIT.' : 'Built by the community under the MIT License.'}
+    </span>
+    <a href="#" class="back-to-top" title={isEs ? 'Volver arriba' : 'Back to top'}>
+      <span>{isEs ? 'Volver arriba' : 'Back to top'}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </a>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    background-color: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+    padding: 60px 0 30px;
+    font-size: 13.5px;
+  }
+
+  .footer-container {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    margin-bottom: 40px;
+  }
+
+  @media (min-width: 768px) {
+    .footer-container {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+  }
+
+  .footer-brand {
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .footer-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .footer-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .accent-text {
+    color: var(--accent);
+  }
+
+  .footer-tagline {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .footer-license {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .footer-links-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+  }
+
+  @media (min-width: 640px) {
+    .footer-links-grid {
+      gap: 56px;
+    }
+  }
+
+  .footer-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .col-title {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .footer-link {
+    color: var(--text-secondary);
+    transition: color 0.15s ease;
+  }
+
+  .footer-link:hover {
+    color: var(--accent);
+  }
+
+  .footer-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+
+  .back-to-top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+    transition: color 0.15s ease;
+  }
+
+  .back-to-top:hover {
+    color: var(--accent);
+  }
+</style>

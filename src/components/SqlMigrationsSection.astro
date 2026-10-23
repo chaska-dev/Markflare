@@ -1,0 +1,415 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  lang?: 'es' | 'en';
+}
+
+const { lang = 'es' } = Astro.props;
+const isEs = lang === 'es';
+
+const sqlBlock1 = `CREATE TABLE IF NOT EXISTS pages (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT 'Untitled',
+  icon TEXT NOT NULL DEFAULT '📄',
+  parent_id TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (parent_id) REFERENCES pages(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS blocks (
+  id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'paragraph',
+  content TEXT NOT NULL DEFAULT '',
+  checked INTEGER NOT NULL DEFAULT 0,
+  language TEXT NOT NULL DEFAULT '',
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  parent_id TEXT,
+  collapsed INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pages_parent ON pages(parent_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_page ON blocks(page_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_position ON blocks(page_id, position);`;
+
+const sqlBlock2 = `CREATE TABLE IF NOT EXISTS files (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size INTEGER NOT NULL DEFAULT 0,
+  storage TEXT NOT NULL DEFAULT 'r2',
+  page_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_page ON files(page_id);`;
+
+const sqlBlock3 = `CREATE TABLE IF NOT EXISTS workspace (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name TEXT NOT NULL DEFAULT 'My Workspace',
+  icon TEXT NOT NULL DEFAULT '📋',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT OR IGNORE INTO workspace (id, name, icon) VALUES (1, 'My Workspace', '📋');`;
+
+const sqlBlock4 = `CREATE TABLE IF NOT EXISTS page_shares (
+  page_id TEXT PRIMARY KEY,
+  token TEXT NOT NULL UNIQUE,
+  revoked INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_page_shares_token ON page_shares(token);`;
+
+const sqlBlock5 = `CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT 'MCP Token',
+  token TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_tokens_id ON api_tokens(id);`;
+---
+
+<section id="migrations" class="migrations-section">
+  <div class="container">
+    <div class="section-header">
+      <span class="badge badge-accent">
+        {isEs ? 'ESQUEMA SQL IDEMPOTENTE' : 'IDEMPOTENT SQL SCHEMA'}
+      </span>
+      <h2 class="section-title">
+        {isEs ? 'Migraciones para Cloudflare D1 & SQLite' : 'Migrations for Cloudflare D1 & SQLite'}
+      </h2>
+      <p class="section-desc">
+        {isEs
+          ? 'Todos los bloques SQL usan "IF NOT EXISTS", por lo que ejecutarlos múltiples veces es 100% seguro. Si despliegas con el Dashboard (Métodos 2, 3 o 5), copia y pega cada bloque en la D1 Console en orden secuencial.'
+          : 'All migration blocks use "IF NOT EXISTS", making repeated executions completely safe. When deploying via the Dashboard (Methods 2, 3, or 5), simply copy and paste each block in the D1 Console in order.'}
+      </p>
+    </div>
+
+    <!-- SQL Blocks Switcher Container -->
+    <div class="sql-interactive-box">
+      <div class="sql-nav-tabs">
+        <button class="sql-tab-btn active" data-sql-tab="sql-1">
+          <span class="sql-badge">Bloque 1</span>
+          <span>0001_initial.sql</span>
+        </button>
+        <button class="sql-tab-btn" data-sql-tab="sql-2">
+          <span class="sql-badge">Bloque 2</span>
+          <span>0002_files.sql</span>
+        </button>
+        <button class="sql-tab-btn" data-sql-tab="sql-3">
+          <span class="sql-badge">Bloque 3</span>
+          <span>0003_workspace.sql</span>
+        </button>
+        <button class="sql-tab-btn" data-sql-tab="sql-4">
+          <span class="sql-badge">Bloque 4</span>
+          <span>0004_shares.sql</span>
+        </button>
+        <button class="sql-tab-btn" data-sql-tab="sql-5">
+          <span class="sql-badge">Bloque 5</span>
+          <span>0005_api_tokens.sql</span>
+        </button>
+      </div>
+
+      <!-- SQL Tab Content Panels -->
+      <div class="sql-panels">
+        <!-- SQL 1 -->
+        <div id="sql-1" class="sql-panel active">
+          <div class="sql-panel-header">
+            <div class="header-info">
+              <strong>0001_initial.sql</strong>
+              <span>{isEs ? 'Crea tablas pages, blocks e índices de consulta por árbol' : 'Creates pages, blocks, and tree hierarchy indexes'}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" data-copy-target={sqlBlock1}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>{isEs ? 'Copiar Bloque 1' : 'Copy Block 1'}</span>
+            </button>
+          </div>
+          <pre class="sql-code-view"><code>{sqlBlock1}</code></pre>
+        </div>
+
+        <!-- SQL 2 -->
+        <div id="sql-2" class="sql-panel">
+          <div class="sql-panel-header">
+            <div class="header-info">
+              <strong>0002_files.sql</strong>
+              <span>{isEs ? 'Metadata de los adjuntos; los bytes viven en R2, no en D1' : 'Attachment metadata — the bytes live in R2, not D1'}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" data-copy-target={sqlBlock2}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>{isEs ? 'Copiar Bloque 2' : 'Copy Block 2'}</span>
+            </button>
+          </div>
+          <pre class="sql-code-view"><code>{sqlBlock2}</code></pre>
+        </div>
+
+        <!-- SQL 3 -->
+        <div id="sql-3" class="sql-panel">
+          <div class="sql-panel-header">
+            <div class="header-info">
+              <strong>0003_workspace.sql</strong>
+              <span>{isEs ? 'Inicializa el singleton workspace con nombre e ícono por defecto' : 'Initializes workspace singleton row with default name & icon'}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" data-copy-target={sqlBlock3}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>{isEs ? 'Copiar Bloque 3' : 'Copy Block 3'}</span>
+            </button>
+          </div>
+          <pre class="sql-code-view"><code>{sqlBlock3}</code></pre>
+        </div>
+
+        <!-- SQL 4 -->
+        <div id="sql-4" class="sql-panel">
+          <div class="sql-panel-header">
+            <div class="header-info">
+              <strong>0004_shares.sql</strong>
+              <span>{isEs ? 'Crea la tabla page_shares con tokens de 128-bit y columna tombstone revoked' : 'Creates page_shares with 128-bit tokens and revoked tombstone'}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" data-copy-target={sqlBlock4}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>{isEs ? 'Copiar Bloque 4' : 'Copy Block 4'}</span>
+            </button>
+          </div>
+          <pre class="sql-code-view"><code>{sqlBlock4}</code></pre>
+        </div>
+
+        <!-- SQL 5 -->
+        <div id="sql-5" class="sql-panel">
+          <div class="sql-panel-header">
+            <div class="header-info">
+              <strong>0005_api_tokens.sql</strong>
+              <span>{isEs ? 'Tokens de API para el servidor MCP, la CLI y agentes' : 'API tokens for the MCP server, the CLI, and agents'}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" data-copy-target={sqlBlock5}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>{isEs ? 'Copiar Bloque 5' : 'Copy Block 5'}</span>
+            </button>
+          </div>
+          <pre class="sql-code-view"><code>{sqlBlock5}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- D1 Rebuild Pattern Tip -->
+    <div class="d1-tip-card">
+      <Icon name="info" class="tip-icon" size={20} />
+      <div class="tip-content">
+        <h4>{isEs ? 'Nota sobre la evolución de esquemas en Cloudflare D1' : 'Note on Cloudflare D1 schema evolution'}</h4>
+        <p>
+          {isEs
+            ? 'SQLite no cuenta con ADD COLUMN IF NOT EXISTS y D1 no permite DROP COLUMN. Para migraciones que modifiquen esquemas de tablas existentes, se recomienda usar el patrón de reconstrucción dentro de una transacción:'
+            : 'SQLite lacks ADD COLUMN IF NOT EXISTS and Cloudflare D1 does not allow DROP COLUMN. For schema modifications on existing tables, use the rebuild table pattern wrapped in a transaction:'}
+        </p>
+        <code class="d1-rebuild-snippet">
+          CREATE TABLE _pages_new (...); INSERT INTO _pages_new SELECT ... FROM pages; DROP TABLE pages; ALTER TABLE _pages_new RENAME TO pages;
+        </code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function initSqlTabs() {
+    const tabs = document.querySelectorAll('.sql-tab-btn');
+    const panels = document.querySelectorAll('.sql-panel');
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const targetId = tab.getAttribute('data-sql-tab');
+        if (!targetId) return;
+
+        tabs.forEach((t) => t.classList.remove('active'));
+        panels.forEach((p) => p.classList.remove('active'));
+
+        tab.classList.add('active');
+        const targetPanel = document.getElementById(targetId);
+        if (targetPanel) {
+          targetPanel.classList.add('active');
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', initSqlTabs);
+</script>
+
+<style>
+  .migrations-section {
+    background-color: var(--bg-primary);
+  }
+
+  .sql-interactive-box {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .sql-nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .sql-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+
+  .sql-tab-btn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+  }
+
+  .sql-tab-btn.active {
+    background-color: var(--bg-secondary);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .sql-badge {
+    font-size: 10px;
+    padding: 2px 5px;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-primary);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-color);
+  }
+
+  .sql-tab-btn.active .sql-badge {
+    color: var(--accent);
+    border-color: var(--accent-border);
+  }
+
+  .sql-panels {
+    background-color: var(--bg-secondary);
+  }
+
+  .sql-panel {
+    display: none;
+  }
+
+  .sql-panel.active {
+    display: block;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .sql-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-primary);
+  }
+
+  .header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .header-info strong {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+
+  .header-info span {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .sql-code-view {
+    padding: 18px;
+    background-color: var(--bg-code);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    overflow-x: auto;
+    max-height: 380px;
+  }
+
+  .d1-tip-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .tip-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: var(--text-tertiary);
+  }
+
+  .tip-content h4 {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+  }
+
+  .tip-content p {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+
+  .d1-rebuild-snippet {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    background-color: var(--bg-code);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    overflow-x: auto;
+  }
+</style>

@@ -1,0 +1,265 @@
+---
+interface Props {
+  lang?: 'es' | 'en';
+}
+
+const { lang = 'es' } = Astro.props;
+const isEs = lang === 'es';
+
+// Real screenshots of the running app — one set per language, so the UI chrome
+// and the note content both match what a visitor in that language will see.
+const shots = isEs
+  ? [
+      {
+        src: '/screenshots/es/app-arquitectura.webp',
+        w: 2880,
+        h: 1988,
+        label: 'Tablas y bloques de código',
+        note: 'Tablas editables en el lugar, y código con selector de idioma y botón de copiar.',
+      },
+      {
+        src: '/screenshots/es/app-pendientes.webp',
+        w: 2880,
+        h: 1800,
+        label: 'Listas de tareas',
+        note: 'Casillas que se marcan y se guardan solas, sin botón de guardar.',
+      },
+    ]
+  : [
+      {
+        src: '/screenshots/en/app-arquitectura.webp',
+        w: 2880,
+        h: 1988,
+        label: 'Tables and code blocks',
+        note: 'Tables you can edit in place, and code with a language picker and a copy button.',
+      },
+      {
+        src: '/screenshots/en/app-pendientes.webp',
+        w: 2880,
+        h: 1800,
+        label: 'Task lists',
+        note: 'Checkboxes that save on their own — there is no save button anywhere.',
+      },
+    ];
+
+const hero = isEs
+  ? { src: '/screenshots/es/app-tour.webp', w: 2880, h: 3474 }
+  : { src: '/screenshots/en/app-tour.webp', w: 2880, h: 3474 };
+
+const phone = isEs
+  ? { src: '/screenshots/es/app-mobile.webp', w: 780, h: 4044 }
+  : { src: '/screenshots/en/app-mobile.webp', w: 780, h: 3996 };
+---
+
+<section id="screenshots" class="shots-section">
+  <div class="container">
+    <div class="section-header">
+      <span class="badge badge-accent">
+        {isEs ? 'LA INTERFAZ REAL' : 'THE REAL INTERFACE'}
+      </span>
+      <h2 class="section-title">
+        {isEs ? 'Así se ve trabajando' : 'What working in it looks like'}
+      </h2>
+      <p class="section-desc">
+        {isEs
+          ? 'Capturas reales de la app corriendo, no maquetas. El árbol de páginas a la izquierda, el editor al centro, y nada más que una barra de formato.'
+          : 'Real screenshots of the app running, not mockups. The page tree on the left, the editor in the middle, and nothing but a format bar.'}
+      </p>
+    </div>
+
+    <!-- Dominant frame: the editor with everything loaded. Cropped at the top
+         because the full page is far taller than any section should be. -->
+    <figure class="shot shot--hero">
+      <div class="shot-frame shot-frame--crop">
+        <img
+          src={hero.src}
+          alt={isEs ? 'El editor de Markflare con una página de ejemplo' : 'The Markflare editor with a sample page'}
+          width={hero.w}
+          height={hero.h}
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+      <figcaption>
+        <span class="shot-label">{isEs ? 'El editor de bloques' : 'The block editor'}</span>
+        <span class="shot-note">
+          {isEs
+            ? 'Títulos, listas, citas, tablas y dos bloques de código conviviendo en una misma página.'
+            : 'Headings, lists, quotes, tables and two code blocks all living on one page.'}
+        </span>
+      </figcaption>
+    </figure>
+
+    <div class="shot-grid">
+      {
+        shots.map((s) => (
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src={s.src} alt={s.label} width={s.w} height={s.h} loading="lazy" decoding="async" />
+            </div>
+            <figcaption>
+              <span class="shot-label">{s.label}</span>
+              <span class="shot-note">{s.note}</span>
+            </figcaption>
+          </figure>
+        ))
+      }
+    </div>
+
+    <figure class="shot shot--phone">
+      <div class="phone">
+        <img
+          src={phone.src}
+          alt={isEs ? 'Markflare en el teléfono' : 'Markflare on a phone'}
+          width={phone.w}
+          height={phone.h}
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+      <figcaption>
+        <span class="shot-label">{isEs ? 'En el teléfono' : 'On a phone'}</span>
+        <span class="shot-note">
+          {isEs
+            ? 'La misma página se lee igual de bien en un teléfono: el sidebar se pliega y el contenido usa todo el ancho.'
+            : 'The same page reads just as well on a phone: the sidebar folds away and the content takes the full width.'}
+        </span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<style>
+  .shots-section {
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .shot {
+    margin: 0;
+  }
+
+  .shot-frame {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: var(--bg-secondary);
+  }
+
+  .shot-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* The guide page is ~1700px tall on its own. Show the top of it and fade the
+     cut so it reads as a deliberate crop rather than a broken image. */
+  .shot-frame--crop {
+    position: relative;
+    max-height: 620px;
+  }
+
+  .shot-frame--crop img {
+    max-height: 620px;
+    object-fit: cover;
+    object-position: top center;
+  }
+
+  .shot-frame--crop::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 140px;
+    background: linear-gradient(to bottom, transparent, var(--bg-secondary));
+    pointer-events: none;
+  }
+
+  figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 14px;
+  }
+
+  .shot-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .shot-note {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 56ch;
+  }
+
+  .shot--hero {
+    margin-bottom: 40px;
+  }
+
+  .shot-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* The two source pages are 1988px and 1800px tall, so left alone the frames
+     differ by 10% and the captions sit at different heights. Fixing the ratio
+     crops both the same amount and lines the labels up. */
+  .shot-grid .shot-frame {
+    aspect-ratio: 16 / 10;
+  }
+
+  .shot-grid .shot-frame img {
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+  }
+
+  /* The phone is the one frame that isn't full-bleed, so it gets its own
+     treatment instead of being squeezed into the grid. */
+  .shot--phone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-top: 48px;
+  }
+
+  .shot--phone figcaption {
+    align-items: center;
+    max-width: 44ch;
+  }
+
+  .phone {
+    width: 100%;
+    max-width: 260px;
+    /* The source is 4000+px tall. At full height the phone is taller than the
+       rest of the section put together. */
+    max-height: 540px;
+    border: 1px solid var(--border-color);
+    border-radius: 26px;
+    overflow: hidden;
+    background-color: var(--bg-secondary);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  }
+
+  .phone img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+  }
+
+  @media (min-width: 900px) {
+    .shot-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

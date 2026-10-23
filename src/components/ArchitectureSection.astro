@@ -1,0 +1,373 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  lang?: 'es' | 'en';
+}
+
+const { lang = 'es' } = Astro.props;
+const isEs = lang === 'es';
+---
+
+<section id="architecture" class="arch-section">
+  <div class="container">
+    <div class="section-header">
+      <span class="badge badge-accent">
+        {isEs ? 'ARQUITECTURA DUAL' : 'DUAL ARCHITECTURE'}
+      </span>
+      <h2 class="section-title">
+        {isEs ? 'Producción en el Edge de Cloudflare · Local con Express' : 'Production on Cloudflare Edge · Local with Express'}
+      </h2>
+      <p class="section-desc">
+        {isEs
+          ? 'Mismo código, dos entornos optimizados. En producción corre como una arquitectura serverless pura en la red global de Cloudflare. En tu máquina, funciona como un servidor Express ligero con SQLite local.'
+          : 'Same codebase, two optimized runtime environments. Runs as a pure serverless edge architecture on Cloudflare Pages + D1 in production, and as a lightweight Express + SQLite stack for local offline development.'}
+      </p>
+    </div>
+
+    <!-- Comparison Architectures Visual -->
+    <div class="arch-comparison-grid">
+      <!-- Production Architecture Box -->
+      <div class="arch-card prod">
+        <div class="arch-card-header">
+          <div class="header-tag">
+            <span class="pulse-dot"></span>
+            <span>{isEs ? 'PRODUCCIÓN (CLOUDFLARE)' : 'PRODUCTION (CLOUDFLARE)'}</span>
+          </div>
+          <span class="header-meta">markflare.pages.dev</span>
+        </div>
+
+        <div class="arch-layers">
+          <!-- Layer 1 -->
+          <div class="layer-item">
+            <div class="layer-label">
+              <span class="layer-name">Cloudflare Pages CDN</span>
+              <span class="layer-tech">React 18 + Vite 5 + TypeScript</span>
+            </div>
+            <p class="layer-detail">
+              {isEs
+                ? 'SPA estático distribuido globalmente con tiempos de carga bajo 50ms.'
+                : 'Static SPA distributed globally with load times under 50ms.'}
+            </p>
+          </div>
+
+          <!-- Connector -->
+          <div class="layer-connector">
+            <span class="connector-arrow">↓</span>
+            <span class="connector-text">Pages Functions /api/*</span>
+          </div>
+
+          <!-- Layer 2 -->
+          <div class="layer-item">
+            <div class="layer-label">
+              <span class="layer-name">Hono Router (Worker)</span>
+              <span class="layer-tech">Pages Functions (V8 Isolate)</span>
+            </div>
+            <p class="layer-detail">
+              {isEs
+                ? 'Endpoints RESTful ultra-ligeros ejecutados en el Worker sin cold starts.'
+                : 'Ultra-lightweight RESTful endpoints executed in Workers with 0ms cold starts.'}
+            </p>
+          </div>
+
+          <!-- Connector -->
+          <div class="layer-connector">
+            <span class="connector-arrow">↓</span>
+            <span class="connector-text">Binding: env.DB</span>
+          </div>
+
+          <!-- Layer 3 -->
+          <div class="layer-item highlight-layer">
+            <div class="layer-label">
+              <span class="layer-name">Cloudflare D1 (SQL)</span>
+              <span class="layer-tech">SQLite Serverless Global</span>
+            </div>
+            <p class="layer-detail">
+              {isEs
+                ? 'Tablas pages, blocks, files y page_shares con soporte completo de transacciones y FKs.'
+                : 'Tables for pages, blocks, files, and shares with full ACID transactions and Foreign Keys.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Local Development Architecture Box -->
+      <div class="arch-card local">
+        <div class="arch-card-header">
+          <div class="header-tag">
+            <span class="terminal-dot"></span>
+            <span>{isEs ? 'DESARROLLO LOCAL' : 'LOCAL DEVELOPMENT'}</span>
+          </div>
+          <span class="header-meta">localhost:5173 & :3000</span>
+        </div>
+
+        <div class="arch-layers">
+          <!-- Layer 1 -->
+          <div class="layer-item">
+            <div class="layer-label">
+              <span class="layer-name">Vite 5 Dev Server</span>
+              <span class="layer-tech">Port 5173 · HMR Instantáneo</span>
+            </div>
+            <p class="layer-detail">
+              {isEs
+                ? 'Recarga en caliente de componentes React para una experiencia de desarrollo veloz.'
+                : 'Instant Hot Module Replacement for rapid frontend component iteration.'}
+            </p>
+          </div>
+
+          <!-- Connector -->
+          <div class="layer-connector">
+            <span class="connector-arrow">↓</span>
+            <span class="connector-text">Proxy Vite → Express :3000</span>
+          </div>
+
+          <!-- Layer 2 -->
+          <div class="layer-item">
+            <div class="layer-label">
+              <span class="layer-name">Express 5 Server</span>
+              <span class="layer-tech">tsx watch server/index.ts</span>
+            </div>
+            <p class="layer-detail">
+              {isEs
+                ? 'Misma API REST idéntica a la de producción para simular el Worker exactamente.'
+                : 'Identical REST endpoints matching the production Worker contract.'}
+            </p>
+          </div>
+
+          <!-- Connector -->
+          <div class="layer-connector">
+            <span class="connector-arrow">↓</span>
+            <span class="connector-text">Direct SQLite Driver</span>
+          </div>
+
+          <!-- Layer 3 -->
+          <div class="layer-item highlight-layer">
+            <div class="layer-label">
+              <span class="layer-name">better-sqlite3</span>
+              <span class="layer-tech">Archivo data/markflare.db</span>
+            </div>
+            <p class="layer-detail">
+              {isEs
+                ? 'Base de datos en un solo archivo local. Funciona completamente offline y sin conexión a internet.'
+                : 'Single local SQLite file. Works completely offline without an internet connection.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security & Architecture Guarantee Cards -->
+    <div class="security-guarantees">
+      <div class="guarantee-box">
+        <Icon name="lock" class="guarantee-icon" size={22} />
+        <div class="guarantee-content">
+          <h4>{isEs ? 'Seguridad Monousuario' : 'Single-User Security'}</h4>
+          <p>
+            {isEs
+              ? 'Tokens HMAC-SHA256 con expiración de 24 horas. Comparaciones criptográficas de tiempo constante que mitigan ataques de temporización.'
+              : '24-hour HMAC-SHA256 bearer tokens with constant-time cryptographic string comparisons against timing attacks.'}
+          </p>
+        </div>
+      </div>
+
+      <div class="guarantee-box">
+        <Icon name="shield" class="guarantee-icon" size={22} />
+        <div class="guarantee-content">
+          <h4>{isEs ? 'Protección contra Fuerza Bruta' : 'Brute Force Protection'}</h4>
+          <p>
+            {isEs
+              ? 'Límite de 5 intentos de inicio de sesión por minuto por IP con respuesta HTTP 429 automática.'
+              : 'Strict rate-limiting: max 5 login attempts per minute per IP address with automated HTTP 429 response.'}
+          </p>
+        </div>
+      </div>
+
+      <div class="guarantee-box">
+        <Icon name="zap" class="guarantee-icon" size={22} />
+        <div class="guarantee-content">
+          <h4>{isEs ? 'Integridad Relacional Forzada' : 'Enforced Relational Integrity'}</h4>
+          <p>
+            {isEs
+              ? 'La directiva PRAGMA foreign_keys = ON se ejecuta en cada conexión para evitar inconsistencias de datos.'
+              : 'PRAGMA foreign_keys = ON is invoked on every single D1 and SQLite connection for strict cascade deletion.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .arch-section {
+    background-color: var(--bg-primary);
+  }
+
+  .arch-comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-bottom: 40px;
+  }
+
+  @media (min-width: 860px) {
+    .arch-comparison-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .arch-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* No coloured top border here. It marked "producción" with orange while the
+     neighbouring local card got grey, which read as decoration and made the
+     pair shout. The card already says which one it is. */
+
+  .arch-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .header-tag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+  }
+
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .terminal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-secondary);
+  }
+
+  .header-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .arch-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .layer-item {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+  }
+
+  .layer-item.highlight-layer {
+    border-color: var(--accent-border);
+    background-color: var(--accent-subtle);
+  }
+
+  .layer-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .layer-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  .layer-tech {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  .layer-detail {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  .layer-connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    padding: 2px 0;
+  }
+
+  .connector-arrow {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .security-guarantees {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  @media (min-width: 768px) {
+    .security-guarantees {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .guarantee-box {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  /* The icon is an SVG now, so the old font-size did nothing and the flex row
+     stretched it. Optically centre it on the title's line box instead. */
+  .guarantee-icon {
+    flex-shrink: 0;
+    margin-top: -2px;
+    color: var(--text-tertiary);
+  }
+
+  .guarantee-content h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+  }
+
+  .guarantee-content p {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+</style>

@@ -1,0 +1,1516 @@
+---
+interface Props {
+  lang?: 'es' | 'en';
+}
+
+const { lang = 'es' } = Astro.props;
+const isEs = lang === 'es';
+const mathEquation = 'f(x) = \\sum_{i=1}^n \\frac{\\partial \\mathcal{L}}{\\partial w_i} x_i + \\lambda \\|w\\|_2^2';
+---
+
+<div class="mock-browser-app">
+  <!-- Sleek Top Window Chrome -->
+  <div class="mock-browser-header">
+    <div class="mock-window-buttons">
+      <span class="btn-dot close" title="Cerrar"></span>
+      <span class="btn-dot min" title="Minimizar"></span>
+      <span class="btn-dot max" title="Maximizar"></span>
+    </div>
+
+    <div class="mock-address-bar">
+      <svg class="lock-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+      <span class="url-text">markflare.pages.dev</span>
+      <span class="url-path">/page/cloudflare-d1-notes</span>
+    </div>
+
+    <div class="mock-status-pill">
+      <span class="status-live-dot"></span>
+      <span class="status-text">Cloudflare Pages + D1</span>
+      <span class="status-latency">12ms edge</span>
+    </div>
+  </div>
+
+  <!-- Real Markflare App Layout (.layout) -->
+  <div class="app-layout">
+    <!-- Real Sidebar (.sidebar) -->
+    <aside class="app-sidebar">
+      <!-- Sidebar Header with exact brandmark -->
+      <div class="sidebar-header">
+        <div class="workspace-name workspace-name--brand">
+          <svg
+            class="brand-cube-svg"
+            width="20"
+            height="22"
+            viewBox="160 75 136 148"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M174.249 116.228L228.059 148.013V212.699L174.249 180.356V116.228Z" fill="#42474C" />
+            <path d="M228.059 148.013L281.869 116.228V180.356L228.059 212.699V148.013Z" fill="#353B41" />
+            <path d="M228.059 85L281.869 116.228L228.059 148.013L174.249 116.228L228.059 85Z" fill="#F38020" />
+            <path d="M174.249 116.228V180.356L228.059 212.699L281.869 180.356V116.228" stroke="#F7F9F9" stroke-width="5" stroke-linejoin="round" />
+            <path d="M228.059 85L281.869 116.228L228.059 148.013L174.249 116.228L228.059 85Z" stroke="#E8FCF7" stroke-width="4" stroke-linejoin="round" />
+          </svg>
+          <div class="workspace-brand-text">
+            <span class="brand-mark">mark</span><span class="brand-accent">flare</span>
+          </div>
+        </div>
+
+        <div class="sidebar-actions">
+          <button class="sidebar-btn" title={isEs ? 'Importar Markdown' : 'Import Markdown'}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+          <button class="sidebar-btn" title={isEs ? 'Nueva página' : 'New page'}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button class="sidebar-btn" title={isEs ? 'Buscar (Ctrl+K)' : 'Search (Ctrl+K)'}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+          <button class="sidebar-btn sidebar-btn--toggle" title={isEs ? 'Colapsar barra lateral' : 'Collapse sidebar'}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real Sidebar Search Row -->
+      <div class="sidebar-search-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>{isEs ? 'Buscar notas...' : 'Search notes...'}</span>
+        <kbd class="sidebar-kbd">Ctrl K</kbd>
+      </div>
+
+      <!-- Real Page List with Structured Sections -->
+      <div class="page-list">
+        <!-- Section 1: RECENTS -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <span class="sidebar-section-title">{isEs ? 'RECIENTES' : 'RECENTS'}</span>
+          </div>
+          <div class="sidebar-recents-list">
+            <div class="sidebar-recent-item active" data-page-title="Cloudflare D1 Notes" data-page-icon="⚡">
+              <span class="sidebar-recent-icon">⚡</span>
+              <span class="sidebar-recent-title">Cloudflare D1 Notes</span>
+            </div>
+            <div class="sidebar-recent-item" data-page-title={isEs ? 'Esquema de Migraciones' : 'Migrations Schema'} data-page-icon="📦">
+              <span class="sidebar-recent-icon">📦</span>
+              <span class="sidebar-recent-title">{isEs ? 'Esquema de Migraciones' : 'Migrations Schema'}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: PROJECTS -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <span class="sidebar-section-title">{isEs ? 'PROYECTOS' : 'PROJECTS'}</span>
+            <button class="sidebar-section-add-btn" title={isEs ? 'Añadir proyecto' : 'Add project'}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="sidebar-tree-group">
+            <div class="page-item active-parent" data-page-title="Markflare Workspace" data-page-icon="📋">
+              <button class="toggle-btn expanded">▾</button>
+              <span class="page-item-icon">📋</span>
+              <span class="page-item-title">Markflare Workspace</span>
+            </div>
+            <!-- Subpages with real indent -->
+            <div class="page-children">
+              <div class="page-item" data-page-title={isEs ? 'Tablas D1 & SQL' : 'D1 SQL Tables'} data-page-icon="📦">
+                <button class="toggle-btn">›</button>
+                <span class="page-item-icon">📦</span>
+                <span class="page-item-title">{isEs ? 'Tablas D1 & SQL' : 'D1 SQL Tables'}</span>
+              </div>
+              <div class="page-item" data-page-title={isEs ? 'Tokens de Acceso' : 'Auth & Secrets'} data-page-icon="🔒">
+                <button class="toggle-btn">›</button>
+                <span class="page-item-icon">🔒</span>
+                <span class="page-item-title">{isEs ? 'Tokens de Acceso' : 'Auth & Secrets'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: PRIVATE -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <span class="sidebar-section-title">{isEs ? 'PRIVADO' : 'PRIVATE'}</span>
+            <button class="sidebar-section-add-btn" title={isEs ? 'Añadir nota privada' : 'Add private note'}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="sidebar-tree-group">
+            <div class="page-item" data-page-title={isEs ? 'Comenzar rápido' : 'Getting Started'} data-page-icon="🚀">
+              <button class="toggle-btn">›</button>
+              <span class="page-item-icon">🚀</span>
+              <span class="page-item-title">{isEs ? 'Comenzar rápido' : 'Getting Started'}</span>
+            </div>
+            <div class="page-item" data-page-title={isEs ? 'Hoja de Ruta v1.1' : 'Roadmap v1.1'} data-page-icon="📝">
+              <button class="toggle-btn">›</button>
+              <span class="page-item-icon">📝</span>
+              <span class="page-item-title">{isEs ? 'Hoja de Ruta v1.1' : 'Roadmap v1.1'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real Sidebar Footer: User profile & Theme switcher -->
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar-circle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+          <span class="sidebar-user-name">admin</span>
+        </div>
+        <button class="sidebar-theme-btn" title={isEs ? 'Tema Oscuro Activo' : 'Dark Theme Active'}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Real Main Content Area (.main-content) -->
+    <main class="app-main-content">
+      <div class="page-view page-view--has-cover">
+        <!-- Top Page Navigation Bar (Breadcrumbs & Actions) -->
+        <div class="page-main-header">
+          <div class="page-breadcrumbs">
+            <span class="breadcrumb-link">
+              <span class="breadcrumb-icon">📋</span>
+              <span>Markflare Workspace</span>
+            </span>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-link active">
+              <span class="breadcrumb-icon preview-crumb-icon">⚡</span>
+              <span class="preview-crumb-title">Cloudflare D1 Notes</span>
+            </span>
+          </div>
+
+          <div class="page-actions">
+            <button class="page-action-btn page-action-btn--project-active">
+              <span>{isEs ? 'Proyecto' : 'Project'}</span>
+            </button>
+            <button class="page-action-btn" title={isEs ? 'Exportar como Markdown' : 'Export as Markdown'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>{isEs ? 'Exportar' : 'Export'}</span>
+            </button>
+            <button class="page-action-btn" title={isEs ? 'Nueva subpágina' : 'New subpage'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>{isEs ? 'Subpágina' : 'Subpage'}</span>
+            </button>
+            <button class="page-action-btn" title={isEs ? 'Compartir públicamente con token 128-bit' : 'Public 128-bit share link'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+              </svg>
+              <span>{isEs ? 'Compartir' : 'Share'}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Real Cover Banner (.page-cover-banner) with Flare Orange gradient -->
+        <div class="page-cover-container">
+          <div class="page-cover-banner" id="preview-cover-banner">
+            <div class="page-cover-actions">
+              <span class="page-cover-dim-tag" id="preview-cover-tag">1500 × 600 px</span>
+              <button class="page-cover-action-btn" id="preview-change-cover-btn" title={isEs ? 'Haz clic para probar gradientes de Markflare' : 'Click to cycle Markflare gradients'}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <span>{isEs ? 'Cambiar portada' : 'Change cover'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Overlapping Page Header (.page-header--with-cover) - LEFT ALIGNED -->
+        <div class="page-header page-header--with-cover">
+          <button class="page-icon-btn page-icon-btn--cover-overlap" title="Emoji de página">
+            <span class="preview-page-icon-emoji">⚡</span>
+          </button>
+          <div class="page-title-wrap">
+            <h1 class="page-title preview-page-title-text">Cloudflare D1 Notes</h1>
+            <div class="page-meta-row">
+              <span class="page-meta-tag">{isEs ? 'Última edición hace 2 min' : 'Edited 2 mins ago'}</span>
+              <span class="page-meta-bullet">•</span>
+              <span class="page-meta-tag">{isEs ? 'SQLite en el Edge de Cloudflare' : 'SQLite on Cloudflare Edge'}</span>
+              <span class="page-meta-bullet">•</span>
+              <span class="page-meta-badge">
+                <span class="meta-badge-dot"></span>
+                <span>{isEs ? 'Público (token 128-bit)' : 'Public (128-bit token)'}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real Block Editor (.block-editor) with authentic Notion rhythm -->
+        <div class="block-editor">
+          <!-- BLOCK 1: Callout Block -->
+          <div class="block-wrapper">
+            <div class="block-handle" title={isEs ? 'Arrastrar bloque' : 'Drag block'}>⠿</div>
+            <div class="block-callout">
+              <div class="block-callout-icon">💡</div>
+              <div class="block-content">
+                <strong>{isEs ? 'Rendimiento Serverless' : 'Serverless Performance'}:</strong> {isEs
+                  ? 'Markflare ejecuta cada consulta SQL directamente en la red edge de Cloudflare con latencia ultra-baja y sin servidores que mantener.'
+                  : 'Markflare executes each SQL query directly on Cloudflare’s global edge with ultra-low latency and zero servers to maintain.'}
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCK 2: Heading 2 -->
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-content heading2">
+              {isEs ? 'Pasos para auto-hospedar' : 'Steps to self-host'}
+            </div>
+          </div>
+
+          <!-- BLOCK 3: Todo List items with interactive checkboxes -->
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-todo preview-todo-item checked">
+              <input type="checkbox" checked />
+              <div class="block-content">
+                {isEs ? 'Clonar repositorio con git clone o descargar archivo ZIP' : 'Clone repository with git clone or download ZIP archive'}
+              </div>
+            </div>
+          </div>
+
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-todo preview-todo-item checked">
+              <input type="checkbox" checked />
+              <div class="block-content">
+                {isEs ? 'Crear base de datos markflare-db en Cloudflare D1' : 'Create markflare-db on Cloudflare D1'}
+              </div>
+            </div>
+          </div>
+
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-todo preview-todo-item">
+              <input type="checkbox" />
+              <div class="block-content">
+                {isEs ? 'Pegar los 4 bloques SQL de migraciones en la D1 Console' : 'Paste 4 SQL migration blocks in D1 Console'}
+              </div>
+            </div>
+          </div>
+
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-todo preview-todo-item">
+              <input type="checkbox" />
+              <div class="block-content">
+                {isEs ? 'Configurar AUTH_USERNAME, AUTH_PASSWORD y AUTH_SECRET' : 'Configure AUTH_USERNAME, AUTH_PASSWORD, and AUTH_SECRET'}
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCK 4: Code Block with working copy button -->
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-code-card">
+              <div class="block-code-header">
+                <span class="code-lang-tag">bash</span>
+                <button type="button" class="block-code-copy-btn" id="preview-code-copy-btn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span>{isEs ? 'Copiar' : 'Copy'}</span>
+                </button>
+              </div>
+              <pre class="block-code-pre"><code><span class="code-comment"># Compilar SPA y publicar en Cloudflare Pages</span>
+<span class="code-prompt">$</span> pnpm run build
+<span class="code-prompt">$</span> wrangler pages deploy dist
+<span class="code-success">✨ Compiled SPA &amp; Pages Functions deployed to markflare.pages.dev</span></code></pre>
+            </div>
+          </div>
+
+          <!-- BLOCK 5: Subpage Link Block (.block-subpage) -->
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <a href="#migrations" class="block-subpage">
+              <span class="block-subpage-icon">📦</span>
+              <span class="block-subpage-title">{isEs ? 'Esquema de Migraciones D1 SQL' : 'D1 SQL Migrations Schema'}</span>
+              <span class="block-subpage-arrow">↗</span>
+            </a>
+          </div>
+
+          <!-- BLOCK 6: Math KaTeX Block (Crisp LaTeX typography) -->
+          <div class="block-wrapper">
+            <div class="block-handle" title="Arrastrar">⠿</div>
+            <div class="block-math-box">
+              <div class="math-rendered-formula">
+                <span class="math-symbol">f(x) = ∑</span>
+                <span class="math-sub">i=1</span>
+                <span class="math-sup">n</span>
+                <span class="math-frac">
+                  <span class="math-num">∂ℒ</span>
+                  <span class="math-den">∂w<sub>i</sub></span>
+                </span>
+                <span class="math-symbol">x<sub>i</sub> + λ ‖w‖₂²</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCK 7: Active Line + Slash Menu (Cleanly positioned BELOW the line, zero overlap) -->
+          <div class="block-wrapper active-editing-line">
+            <div class="block-handle" style="opacity: 1;">⠿</div>
+            <div class="block-content slash-prompt-line">
+              <span class="slash-char">/</span>
+              <span class="slash-placeholder-text">{isEs ? 'Escribe "/" para comandos o empieza a teclear...' : 'Type "/" for commands or start typing...'}</span>
+              <span class="caret-blink"></span>
+            </div>
+          </div>
+
+          <!-- Dedicated Slash Menu Drawer (Positioned cleanly below, NEVER blocks the code) -->
+          <div class="slash-menu-drawer">
+            <div class="slash-menu-header">
+              <span class="slash-menu-title">{isEs ? 'BLOQUES BÁSICOS' : 'BASIC BLOCKS'}</span>
+              <span class="slash-menu-hint">{isEs ? 'Navega con flechas' : 'Navigate with arrows'}</span>
+            </div>
+            <div class="slash-menu-list">
+              <div class="slash-menu-item active">
+                <div class="slash-menu-item-icon h1-icon">H1</div>
+                <div class="slash-menu-item-info">
+                  <span class="slash-menu-item-label">{isEs ? 'Encabezado 1' : 'Heading 1'}</span>
+                  <span class="slash-menu-item-desc">{isEs ? 'Título de sección grande' : 'Large section heading'}</span>
+                </div>
+              </div>
+              <div class="slash-menu-item">
+                <div class="slash-menu-item-icon check-icon">☑</div>
+                <div class="slash-menu-item-info">
+                  <span class="slash-menu-item-label">{isEs ? 'Lista de Tareas' : 'To-do List'}</span>
+                  <span class="slash-menu-item-desc">{isEs ? 'Seguimiento con casillas' : 'Track tasks with checkboxes'}</span>
+                </div>
+              </div>
+              <div class="slash-menu-item">
+                <div class="slash-menu-item-icon code-icon">&lt;/&gt;</div>
+                <div class="slash-menu-item-info">
+                  <span class="slash-menu-item-label">{isEs ? 'Bloque de Código' : 'Code Block'}</span>
+                  <span class="slash-menu-item-desc">{isEs ? 'Resaltado con múltiples lenguajes' : 'Syntax-highlighted code'}</span>
+                </div>
+              </div>
+              <div class="slash-menu-item">
+                <div class="slash-menu-item-icon math-icon">Σ</div>
+                <div class="slash-menu-item-info">
+                  <span class="slash-menu-item-label">{isEs ? 'Ecuación KaTeX' : 'Math Equation'}</span>
+                  <span class="slash-menu-item-desc">{isEs ? 'Fórmulas matemáticas LaTeX' : 'LaTeX math typesetting'}</span>
+                </div>
+              </div>
+              <div class="slash-menu-item">
+                <div class="slash-menu-item-icon callout-icon">💡</div>
+                <div class="slash-menu-item-info">
+                  <span class="slash-menu-item-label">Callout</span>
+                  <span class="slash-menu-item-desc">{isEs ? 'Caja destacada con emoji' : 'Highlighted box with icon'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // Interactive preview logic
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1. Cover Gradient Switcher
+    const PRESET_GRADIENTS = [
+      { name: 'Flare Orange', value: 'linear-gradient(135deg, #F38020 0%, #FAAD3F 50%, #FF5A00 100%)' },
+      { name: 'Sunset Coral', value: 'linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%)' },
+      { name: 'Aurora', value: 'linear-gradient(135deg, #0575E6 0%, #00F260 100%)' },
+      { name: 'Cyberpunk', value: 'linear-gradient(135deg, #8A2387 0%, #E94057 50%, #F27121 100%)' },
+      { name: 'Deep Ocean', value: 'linear-gradient(135deg, #2b5876 0%, #4e4376 100%)' },
+      { name: 'Obsidian Dark', value: 'linear-gradient(135deg, #232526 0%, #414345 100%)' },
+    ];
+    let gradIdx = 0;
+    const coverBanner = document.getElementById('preview-cover-banner');
+    const changeCoverBtn = document.getElementById('preview-change-cover-btn');
+    const coverTag = document.getElementById('preview-cover-tag');
+
+    changeCoverBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gradIdx = (gradIdx + 1) % PRESET_GRADIENTS.length;
+      const current = PRESET_GRADIENTS[gradIdx];
+      if (coverBanner) {
+        coverBanner.style.background = current.value;
+      }
+      if (coverTag) {
+        coverTag.textContent = current.name;
+        setTimeout(() => {
+          coverTag.textContent = '1500 × 600 px';
+        }, 1800);
+      }
+    });
+
+    // 2. Interactive Todo Checkboxes
+    const todoRows = document.querySelectorAll('.preview-todo-item');
+    todoRows.forEach((row) => {
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      row.addEventListener('click', (e) => {
+        if (e.target !== checkbox && checkbox) {
+          checkbox.checked = !checkbox.checked;
+        }
+        if (checkbox?.checked) {
+          row.classList.add('checked');
+        } else {
+          row.classList.remove('checked');
+        }
+      });
+    });
+
+    // 3. Interactive Code Copy
+    const copyBtn = document.getElementById('preview-code-copy-btn');
+    const bashSnippet = `# Compilar SPA y publicar en Cloudflare Pages
+pnpm run build
+wrangler pages deploy dist`;
+
+    copyBtn?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(bashSnippet);
+        const originalHtml = copyBtn.innerHTML;
+        copyBtn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: #27ae60;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span style="color: #27ae60;">¡Copiado!</span>
+        `;
+        setTimeout(() => {
+          copyBtn.innerHTML = originalHtml;
+        }, 2000);
+      } catch (err) {
+        console.error('Clipboard copy failed', err);
+      }
+    });
+
+    // 4. Interactive Sidebar Items
+    const sidebarItems = document.querySelectorAll('.app-sidebar .sidebar-recent-item, .app-sidebar .page-item');
+    const pageTitleText = document.querySelector('.preview-page-title-text');
+    const pageIconEmoji = document.querySelector('.preview-page-icon-emoji');
+    const crumbTitle = document.querySelector('.preview-crumb-title');
+    const crumbIcon = document.querySelector('.preview-crumb-icon');
+
+    sidebarItems.forEach((item) => {
+      item.addEventListener('click', () => {
+        sidebarItems.forEach((i) => i.classList.remove('active'));
+        item.classList.add('active');
+
+        const title = item.getAttribute('data-page-title');
+        const icon = item.getAttribute('data-page-icon');
+
+        if (title && pageTitleText) {
+          pageTitleText.textContent = title;
+          if (crumbTitle) crumbTitle.textContent = title;
+        }
+        if (icon && pageIconEmoji) {
+          pageIconEmoji.textContent = icon;
+          if (crumbIcon) crumbIcon.textContent = icon;
+        }
+      });
+    });
+
+    // 5. Slash Menu Item Clicks
+    const slashItems = document.querySelectorAll('.slash-menu-item');
+    slashItems.forEach((si) => {
+      si.addEventListener('click', () => {
+        slashItems.forEach((s) => s.classList.remove('active'));
+        si.classList.add('active');
+      });
+    });
+  });
+</script>
+
+<style>
+  /* Mock Window Container */
+  .mock-browser-app {
+    background: var(--bg-primary, #191919);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 28px 80px -15px rgba(0, 0, 0, 0.85),
+      0 0 45px -10px rgba(243, 128, 32, 0.16);
+    overflow: hidden;
+    max-width: 1040px;
+    margin: 0 auto;
+    text-align: left;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+
+  .mock-browser-app:hover {
+    border-color: rgba(243, 128, 32, 0.25);
+    box-shadow:
+      0 0 0 1px rgba(243, 128, 32, 0.2),
+      0 32px 90px -15px rgba(0, 0, 0, 0.9),
+      0 0 60px -10px rgba(243, 128, 32, 0.25);
+  }
+
+  /* Browser Bar */
+  .mock-browser-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--bg-secondary, #202020);
+    border-bottom: 1px solid var(--border-color, #2f2f2f);
+    gap: 14px;
+  }
+
+  .mock-window-buttons {
+    display: flex;
+    gap: 7px;
+  }
+
+  .btn-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    transition: opacity 0.15s;
+    cursor: default;
+  }
+
+  .btn-dot.close { background: #ff5f56; }
+  .btn-dot.min { background: #ffbd2e; }
+  .btn-dot.max { background: #27c93f; }
+
+  .mock-address-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-primary, #191919);
+    border: 1px solid var(--border-color, #2f2f2f);
+    padding: 4px 14px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    max-width: 440px;
+    width: 100%;
+    user-select: none;
+  }
+
+  .lock-icon {
+    color: var(--accent, #F38020);
+    flex-shrink: 0;
+  }
+
+  .url-text {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .url-path {
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mock-status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    user-select: none;
+  }
+
+  .status-live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #27ae60;
+    box-shadow: 0 0 8px #27ae60;
+  }
+
+  .status-latency {
+    font-size: 10px;
+    color: var(--accent, #F38020);
+    background: rgba(243, 128, 32, 0.12);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid rgba(243, 128, 32, 0.25);
+  }
+
+  /* App Layout (.layout) */
+  .app-layout {
+    display: flex;
+    height: 650px;
+    background: var(--bg-primary, #191919);
+  }
+
+  /* Exact Sidebar (.sidebar) */
+  .app-sidebar {
+    width: 250px;
+    background: var(--bg-secondary, #202020);
+    border-right: 1px solid var(--border-color, #2f2f2f);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 768px) {
+    .app-sidebar {
+      display: none;
+    }
+  }
+
+  .sidebar-header {
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .workspace-name--brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+
+  .brand-mark {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  .brand-accent {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--accent, #F38020);
+  }
+
+  .sidebar-actions {
+    display: flex;
+    gap: 2px;
+  }
+
+  .sidebar-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .sidebar-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  /* Sidebar Search Row */
+  .sidebar-search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 10px 10px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    transition: background 0.12s, color 0.12s;
+  }
+
+  .sidebar-search-row:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .sidebar-kbd {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-color);
+    color: var(--text-tertiary);
+  }
+
+  /* Page List */
+  .page-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sidebar-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 6px;
+  }
+
+  .sidebar-section-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    letter-spacing: 0.06em;
+  }
+
+  .sidebar-section-add-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.1s;
+  }
+
+  .sidebar-section-add-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .sidebar-recent-item, .page-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    gap: 7px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    user-select: none;
+  }
+
+  .sidebar-recent-item:hover, .page-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .sidebar-recent-item.active, .page-item.active {
+    background: var(--bg-active);
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .page-children {
+    padding-left: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .toggle-btn {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .page-item-icon, .sidebar-recent-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .page-item-title, .sidebar-recent-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  /* Sidebar Footer */
+  .sidebar-footer {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .user-avatar-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+  }
+
+  .sidebar-theme-btn {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.1s;
+  }
+
+  .sidebar-theme-btn:hover {
+    color: var(--text-primary);
+  }
+
+  /* Main Canvas (.main-content) */
+  .app-main-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg-primary, #191919);
+    scroll-behavior: smooth;
+  }
+
+  .page-view {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 12px 36px 60px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top Navigation Bar */
+  .page-main-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding: 4px 0;
+  }
+
+  .page-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+
+  .breadcrumb-link {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+  }
+
+  .breadcrumb-link.active {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .breadcrumb-separator {
+    color: var(--text-tertiary);
+    font-size: 11px;
+  }
+
+  .page-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .page-action-btn {
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.12s ease;
+  }
+
+  .page-action-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .page-action-btn--project-active {
+    color: #F38020 !important;
+    border-color: rgba(243, 128, 32, 0.4) !important;
+    background: rgba(243, 128, 32, 0.1) !important;
+    font-weight: 500;
+  }
+
+  /* Cover Banner Container (.page-cover-container) */
+  .page-cover-container {
+    position: relative;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .page-cover-banner {
+    height: 175px;
+    width: 100%;
+    position: relative;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #F38020 0%, #FAAD3F 50%, #FF5A00 100%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transition: background 0.4s ease;
+  }
+
+  .page-cover-actions {
+    position: absolute;
+    bottom: 12px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .page-cover-dim-tag {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    user-select: none;
+  }
+
+  .page-cover-action-btn {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 4px 11px;
+    font-size: 11.5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, transform 0.1s;
+  }
+
+  .page-cover-action-btn:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: translateY(-1px);
+  }
+
+  /* Overlapping Page Header (.page-header--with-cover) - LEFT ALIGNED */
+  .page-header--with-cover {
+    position: relative;
+    margin-top: -38px;
+    z-index: 10;
+    margin-bottom: 20px;
+    padding-left: 2px;
+  }
+
+  .page-icon-btn--cover-overlap {
+    width: 68px;
+    height: 68px;
+    font-size: 44px;
+    border-radius: 14px;
+    background: var(--bg-primary, #191919);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 0 2px var(--bg-secondary, #202020);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+
+  .page-icon-btn--cover-overlap:hover {
+    transform: scale(1.05);
+  }
+
+  .page-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+  }
+
+  .page-title {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text-primary, #e8e8e8);
+    margin: 0;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    text-align: left;
+  }
+
+  .page-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+
+  .page-meta-bullet {
+    opacity: 0.5;
+  }
+
+  .page-meta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #F38020;
+    background: rgba(243, 128, 32, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(243, 128, 32, 0.25);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .meta-badge-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #F38020;
+  }
+
+  /* Block Editor */
+  .block-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .block-wrapper {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    padding-left: 24px;
+    border-radius: 4px;
+    transition: background-color 0.12s ease;
+  }
+
+  .block-wrapper:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  .block-handle {
+    position: absolute;
+    left: 2px;
+    top: 3px;
+    width: 18px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    cursor: grab;
+    color: var(--text-tertiary);
+    font-size: 13px;
+    user-select: none;
+  }
+
+  .block-wrapper:hover .block-handle {
+    opacity: 1;
+  }
+
+  .block-content {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    padding: 2px 0;
+    text-align: left;
+  }
+
+  .block-content.heading2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 14px;
+    margin-bottom: 2px;
+    color: var(--text-primary);
+  }
+
+  /* Callout Block (.block-callout) */
+  .block-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(243, 128, 32, 0.07);
+    border-left: 3px solid var(--accent, #F38020);
+    padding: 12px 16px;
+    border-radius: 0 6px 6px 0;
+    width: 100%;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+
+  .block-callout-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* Todo Block (.block-todo) */
+  .block-todo {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    width: 100%;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+  }
+
+  .block-todo input[type="checkbox"] {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 3px;
+    position: relative;
+    background: transparent;
+    transition: all 0.12s ease;
+  }
+
+  .block-todo input[type="checkbox"]:checked {
+    background: var(--accent, #F38020);
+    border-color: var(--accent, #F38020);
+  }
+
+  .block-todo input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 4.5px;
+    top: 1.5px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .block-todo.checked .block-content {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+  }
+
+  /* Code Block (.block-code-card) */
+  .block-code-card {
+    width: 100%;
+    background: #141417;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: var(--font-mono);
+  }
+
+  .block-code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .code-lang-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent, #F38020);
+    text-transform: lowercase;
+  }
+
+  .block-code-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+
+  .block-code-copy-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .block-code-pre {
+    margin: 0;
+    padding: 12px 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #e8e8e8;
+    overflow-x: auto;
+  }
+
+  .code-comment { color: #6A9955; }
+  .code-prompt { color: var(--accent, #F38020); font-weight: 700; }
+  .code-success { color: #27ae60; display: block; margin-top: 4px; }
+
+  /* Subpage Inline Block (.block-subpage) */
+  .block-subpage {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: all 0.12s ease;
+    margin: 2px 0;
+  }
+
+  .block-subpage:hover {
+    background: var(--bg-hover);
+    border-color: rgba(243, 128, 32, 0.35);
+  }
+
+  .block-subpage-icon { font-size: 14px; }
+  .block-subpage-title { font-weight: 500; }
+  .block-subpage-arrow { color: var(--text-tertiary); font-size: 12px; }
+
+  /* Math Block (.block-math-box) */
+  .block-math-box {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    width: 100%;
+    text-align: center;
+    user-select: none;
+  }
+
+  .math-rendered-formula {
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+    font-size: 16px;
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .math-symbol { font-size: 16px; }
+  .math-sub { font-size: 11px; vertical-align: sub; }
+  .math-sup { font-size: 11px; vertical-align: super; }
+
+  .math-frac {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    padding: 0 4px;
+    font-size: 13px;
+  }
+
+  .math-num { border-bottom: 1px solid rgba(255, 255, 255, 0.4); padding-bottom: 1px; }
+  .math-den { padding-top: 1px; }
+
+  /* Active Editing Line with / */
+  .active-editing-line {
+    margin-top: 8px;
+  }
+
+  .slash-prompt-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-tertiary);
+    font-size: 13.5px;
+  }
+
+  .slash-char {
+    color: var(--accent, #F38020);
+    font-weight: 700;
+  }
+
+  .caret-blink {
+    width: 2px;
+    height: 15px;
+    background: var(--accent, #F38020);
+    animation: blink 1s step-start infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* Dedicated Slash Menu Drawer - FLOWS NATURALLY BELOW, NEVER BLOCKS */
+  .slash-menu-drawer {
+    margin-left: 24px;
+    margin-top: 6px;
+    background: var(--bg-secondary, #202020);
+    border: 1px solid var(--border-color, #2f2f2f);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    max-width: 320px;
+    width: 100%;
+    padding: 5px;
+  }
+
+  .slash-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 4px;
+  }
+
+  .slash-menu-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    letter-spacing: 0.06em;
+  }
+
+  .slash-menu-hint {
+    font-size: 10px;
+    color: var(--text-tertiary);
+  }
+
+  .slash-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .slash-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.1s;
+    user-select: none;
+  }
+
+  .slash-menu-item:hover, .slash-menu-item.active {
+    background: var(--bg-hover);
+  }
+
+  .slash-menu-item-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .h1-icon { background: #ffffff; color: #111111; font-family: var(--font-mono); }
+  .check-icon { background: rgba(243, 128, 32, 0.2); color: #F38020; }
+  .code-icon { background: #2f2f2f; color: #9b9b9b; font-family: var(--font-mono); font-size: 10px; }
+  .math-icon { background: rgba(5, 117, 230, 0.2); color: #00F260; font-family: serif; }
+  .callout-icon { background: rgba(243, 128, 32, 0.15); font-size: 12px; }
+
+  .slash-menu-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+  }
+
+  .slash-menu-item-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .slash-menu-item-desc {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+</style>
