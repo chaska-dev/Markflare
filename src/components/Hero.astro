@@ -27,8 +27,8 @@ const h = t.hero;
     </dl>
 
     <div class="body">
+      <h1 id="hero-title" class="headline"><span class="visually-hidden">Markflare: </span>{h.headline}</h1>
       <div class="pitch">
-        <h1 id="hero-title" class="headline"><span class="visually-hidden">Markflare: </span>{h.headline}</h1>
         <p class="lead">{h.lead}</p>
         <CopyCommand command={CLONE} t={t.copy} class="hero-cmd" />
         <div class="actions">
@@ -41,16 +41,18 @@ const h = t.hero;
           <a class="btn btn-line" href={REPO}>{h.github}</a>
         </div>
       </div>
-
-      <Plate
-        class="hero-plate"
-        src={`/screenshots/${lang}/app-tour.webp`}
-        alt={h.plateAlt}
-        caption={h.plate}
-        ratio="2880 / 2350"
-        eager
-      />
     </div>
+
+    <Plate
+      class="hero-plate"
+      src={`/screenshots/${lang}/app-editor.webp`}
+      mobileSrc={`/screenshots/${lang}/app-mobile.webp`}
+      alt={h.plateAlt}
+      caption={h.plate}
+      ratio="1200 / 760"
+      mobileRatio="390 / 640"
+      eager
+    />
   </div>
   <div class="tape" aria-hidden="true"></div>
 </section>
@@ -112,16 +114,22 @@ const h = t.hero;
   .body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: clamp(28px, 4vw, 64px);
+    gap: clamp(24px, 4vw, 64px);
     padding-top: clamp(28px, 3.4vw, 48px);
-    padding-bottom: clamp(48px, 6vw, 88px);
+    padding-bottom: clamp(32px, 4vw, 56px);
     align-items: start;
+  }
+
+  /* The real app sits across the full width of the case, close to its actual
+     size, so the interface reads as itself. */
+  .frame-inner > :global(.hero-plate) {
+    margin-bottom: clamp(48px, 6vw, 88px);
   }
 
   .headline {
     font-family: var(--font-display);
     font-weight: 700;
-    font-size: clamp(2.2rem, 3.6vw, 3.4rem);
+    font-size: clamp(2.4rem, 4.6vw, 4.4rem);
     line-height: 0.98;
     letter-spacing: -0.005em;
     text-transform: uppercase;
@@ -129,7 +137,6 @@ const h = t.hero;
   }
 
   .lead {
-    margin-top: 20px;
     max-width: 46ch;
     font-size: 1.15rem;
     line-height: 1.5;
@@ -178,6 +185,10 @@ const h = t.hero;
 
     .pitch {
       max-width: 640px;
+    }
+
+    .body {
+      gap: 20px;
     }
   }
 

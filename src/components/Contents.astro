@@ -8,10 +8,13 @@ interface Props {
 }
 
 const { lang, t } = Astro.props;
+// Frame shapes, in the order of t.plates: the desktop editor, the phone
+// beside it at the same height, then two content-only crops side by side.
 const shapes = [
-  { ratio: '16 / 11', position: 'top left' },
-  { ratio: '16 / 11', position: 'top left' },
-  { fill: true, position: 'top' },
+  { ratio: '1200 / 760', cls: 'wide' },
+  { fill: true, cls: 'phone' },
+  { ratio: '1880 / 1400', cls: 'half' },
+  { ratio: '1880 / 1400', cls: 'half' },
 ];
 ---
 
@@ -39,9 +42,9 @@ const shapes = [
           src={`/screenshots/${lang}/${p.src}.webp`}
           alt={p.alt}
           caption={p.caption}
+          class={shapes[i].cls}
           ratio={shapes[i].ratio}
           fill={shapes[i].fill}
-          position={shapes[i].position}
         />
       ))}
     </div>
@@ -121,10 +124,26 @@ const shapes = [
 
   .plates {
     display: grid;
-    grid-template-columns: 1fr 1fr 0.4fr;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: clamp(16px, 2vw, 28px);
     align-items: stretch;
     margin-top: clamp(48px, 6vw, 88px);
+  }
+
+  .plates > :global(.wide) {
+    grid-column: span 9;
+  }
+
+  .plates > :global(.phone) {
+    grid-column: span 3;
+  }
+
+  .plates > :global(.half:nth-child(3)) {
+    grid-column: 1 / 7;
+  }
+
+  .plates > :global(.half:nth-child(4)) {
+    grid-column: 7 / -1;
   }
 
   @media (max-width: 960px) {
@@ -152,18 +171,19 @@ const shapes = [
       grid-area: tag;
     }
 
-    .plates {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    .plates > :global(.wide) {
+      grid-column: 1 / -1;
     }
 
-    .plates > :global(:last-child) {
+    .plates > :global(.phone) {
       display: none;
     }
   }
 
   @media (max-width: 560px) {
-    .plates {
-      grid-template-columns: minmax(0, 1fr);
+    .plates > :global(.half:nth-child(3)),
+    .plates > :global(.half:nth-child(4)) {
+      grid-column: 1 / -1;
     }
   }
 </style>

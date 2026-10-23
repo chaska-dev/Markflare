@@ -1,30 +1,50 @@
 ---
-// An aluminium inspection plate riveted around a real screenshot,
-// with its caption stamped into the bottom rail.
+// A real screenshot riveted into an ink bezel, its caption stamped on the
+// bottom rail. Captures are viewport-sized frames shot at 2x, so they read
+// at the size the page shows them instead of being a full page shrunk down.
 interface Props {
   src: string;
   alt: string;
   caption: string;
   ratio?: string;
   fill?: boolean;
+  // A narrower capture swapped in on phones, where a desktop frame is too small to read.
+  mobileSrc?: string;
+  mobileRatio?: string;
   position?: string;
   eager?: boolean;
   class?: string;
 }
 
-const { src, alt, caption, ratio, fill = false, position = 'top', eager = false, class: className } = Astro.props;
+const {
+  src,
+  alt,
+  caption,
+  ratio,
+  fill = false,
+  mobileSrc,
+  mobileRatio,
+  position = 'top',
+  eager = false,
+  class: className,
+} = Astro.props;
+
+const vars = [ratio && `--ratio: ${ratio}`, mobileRatio && `--ratio-sm: ${mobileRatio}`].filter(Boolean).join('; ');
 ---
 
 <figure class:list={['plate', { 'plate-fill': fill }, className]}>
-  <div class="plate-window" style={ratio ? `aspect-ratio: ${ratio}` : undefined}>
-    <img
-      src={src}
-      alt={alt}
-      loading={eager ? 'eager' : 'lazy'}
-      fetchpriority={eager ? 'high' : 'auto'}
-      decoding="async"
-      style={`object-position: ${position}`}
-    />
+  <div class="plate-window" style={vars || undefined}>
+    <picture>
+      {mobileSrc && <source media="(max-width: 640px)" srcset={mobileSrc} />}
+      <img
+        src={src}
+        alt={alt}
+        loading={eager ? 'eager' : 'lazy'}
+        fetchpriority={eager ? 'high' : 'auto'}
+        decoding="async"
+        style={`object-position: ${position}`}
+      />
+    </picture>
   </div>
   <figcaption class="plate-rail">{caption}</figcaption>
   <span class="rivet r1" aria-hidden="true"></span>
@@ -38,15 +58,18 @@ const { src, alt, caption, ratio, fill = false, position = 'top', eager = false,
     position: relative;
     display: flex;
     flex-direction: column;
-    padding: 18px 18px 0;
-    background: var(--alu);
-    border: var(--rule) solid var(--ink);
+    padding: 14px 14px 0;
+    background: var(--ink);
   }
 
   .plate-window {
     overflow: hidden;
+    aspect-ratio: var(--ratio, auto);
     background: var(--ink);
-    border: 2px solid var(--ink);
+  }
+
+  .plate-window picture {
+    display: contents;
   }
 
   /* A fill plate takes its height from its row instead of its own ratio. */
@@ -68,45 +91,48 @@ const { src, alt, caption, ratio, fill = false, position = 'top', eager = false,
   }
 
   .plate-rail {
-    padding: 11px 14px 13px;
-    color: var(--ink);
+    padding: 11px 16px 13px;
+    color: var(--label);
     font-family: var(--font-display);
     font-size: 1.05rem;
     font-weight: 600;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     line-height: 1.2;
   }
 
   .rivet {
     position: absolute;
-    width: 9px;
-    height: 9px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--alu-deep);
-    border: 2px solid var(--ink);
   }
 
   .r1 {
-    top: 5px;
-    left: 5px;
+    top: 4px;
+    left: 4px;
   }
   .r2 {
-    top: 5px;
-    right: 5px;
+    top: 4px;
+    right: 4px;
   }
   .r3 {
-    bottom: 5px;
-    left: 5px;
+    bottom: 4px;
+    left: 4px;
   }
   .r4 {
-    bottom: 5px;
-    right: 5px;
+    bottom: 4px;
+    right: 4px;
   }
 
-  @media (max-width: 520px) {
+  @media (max-width: 640px) {
     .plate {
-      padding: 12px 12px 0;
+      padding: 10px 10px 0;
+    }
+
+    .plate-window {
+      aspect-ratio: var(--ratio-sm, var(--ratio, auto));
     }
 
     .plate-rail {

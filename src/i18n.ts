@@ -39,7 +39,7 @@ const es = {
     github: 'Ver en GitHub',
     plate: 'Captura real del editor. No es una maqueta.',
     plateAlt:
-      'El editor de Markflare con el árbol de páginas a la izquierda y una página con títulos, listas, una tabla, bloques de código y tareas.',
+      'El editor de Markflare: el árbol de páginas a la izquierda y la página Arquitectura con una tabla de servicios y un bloque de código SQL.',
   },
   contents: {
     title: 'Qué hay dentro',
@@ -86,19 +86,24 @@ const es = {
     ],
     plates: [
       {
-        src: 'app-arquitectura',
-        caption: 'Tablas y bloques de código',
-        alt: 'Una página de Markflare con una tabla de servicios y un bloque de código SQL.',
-      },
-      {
-        src: 'app-pendientes',
-        caption: 'Listas de tareas',
-        alt: 'Una página de Markflare con listas de pendientes agrupadas por sprint.',
+        src: 'app-deploy',
+        caption: 'Subpáginas anidadas y código',
+        alt: 'La subpágina Despliegue dentro de Arquitectura, con una lista de pasos y un bloque de código de terminal.',
       },
       {
         src: 'app-mobile',
         caption: 'En el teléfono',
         alt: 'Markflare en la pantalla de un teléfono.',
+      },
+      {
+        src: 'app-schema',
+        caption: 'Tablas editables',
+        alt: 'Una página de Markflare con una tabla de las seis tablas de la base de datos.',
+      },
+      {
+        src: 'app-meeting',
+        caption: 'Listas y títulos',
+        alt: 'Notas de reunión con dos listas: lo cerrado y lo abierto.',
       },
     ],
   },
@@ -214,7 +219,7 @@ const en: typeof es = {
     github: 'View on GitHub',
     plate: 'A real capture of the editor. Not a mockup.',
     plateAlt:
-      'The Markflare editor with the page tree on the left and a page holding headings, lists, a table, code blocks and to-dos.',
+      'The Markflare editor: the page tree on the left and the Architecture page with a table of services and an SQL code block.',
   },
   contents: {
     title: "What's inside",
@@ -261,19 +266,24 @@ const en: typeof es = {
     ],
     plates: [
       {
-        src: 'app-arquitectura',
-        caption: 'Tables and code blocks',
-        alt: 'A Markflare page with a table of services and an SQL code block.',
-      },
-      {
-        src: 'app-pendientes',
-        caption: 'To-do lists',
-        alt: 'A Markflare page with to-do lists grouped by sprint.',
+        src: 'app-deploy',
+        caption: 'Nested subpages and code',
+        alt: 'The Deploy subpage inside Architecture, with a list of steps and a shell code block.',
       },
       {
         src: 'app-mobile',
         caption: 'On a phone',
         alt: 'Markflare on a phone screen.',
+      },
+      {
+        src: 'app-schema',
+        caption: 'Editable tables',
+        alt: 'A Markflare page with a table of the six database tables.',
+      },
+      {
+        src: 'app-meeting',
+        caption: 'Lists and headings',
+        alt: 'Meeting notes with two lists: what closed and what is open.',
       },
     ],
   },
