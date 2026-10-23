@@ -53,7 +53,7 @@ spacing:
   gutter: "clamp(36px, 6vw, 96px)"
   gutter-mobile: "28px"
   section: "clamp(64px, 8vw, 120px)"
-  plate-inset: "18px"
+  plate-inset: "14px"
   button-gap: "12px"
 components:
   button-solid:
@@ -97,10 +97,10 @@ components:
     rounded: "{rounded.none}"
     padding: "3px 9px 4px"
   plate:
-    backgroundColor: "{colors.aluminium}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.label-white}"
     rounded: "{rounded.none}"
-    padding: "18px 18px 0"
+    padding: "14px 14px 0"
   nav:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.paper-soft}"
@@ -116,7 +116,7 @@ components:
 
 Markflare presents like a piece of field equipment: one orange case, its parts listed on the lid, its operating instructions printed in heavy condensed capitals on a label. Every surface is a flat spot ink. Whole regions flood with flare orange, ink black, label white, or aluminium grey, and nothing is tinted, blended, or lifted. Structure comes from thick black rules and boxed panels, the way an equipment label divides its fields, not from cards floating on a background.
 
-Density is high and confident. Headings are set huge and tight in Barlow Condensed caps, body copy stays in plain Barlow at a readable measure, and JetBrains Mono appears only where something is meant to be typed. Real product screenshots sit inside riveted aluminium plates, never as glowing mockups. The single piece of motion is the fuse, a dashed cord down the left gutter of each section that burns solid as the section scrolls past.
+Density is high and confident. Headings are set huge and tight in Barlow Condensed caps, body copy stays in plain Barlow at a readable measure, and JetBrains Mono appears only where something is meant to be typed. Real product screenshots sit inside riveted ink bezels, shot at the size the page shows them, never as glowing mockups. The single piece of motion is the fuse, a dashed cord down the left gutter of each section that burns solid as the section scrolls past.
 
 The world refuses the dark SaaS hero: no glowing screenshot, no gradient wash, no grid of rounded cards with soft shadows.
 
@@ -125,7 +125,7 @@ The world refuses the dark SaaS hero: no glowing screenshot, no gradient wash, n
 - Heavy condensed uppercase for every label, title, and button.
 - Thick ink rules (3px, 6px) divide content into label fields.
 - Square corners everywhere; the only circle is a rivet.
-- Real screenshots live in riveted aluminium plates with a stamped caption rail.
+- Real screenshots live in riveted ink bezels with a stamped caption rail; the spec sheet alone is an aluminium nameplate.
 - One signature motion: the fuse burns down the gutter on scroll.
 
 ## Colors
@@ -138,7 +138,7 @@ Four spot inks plus three ground-mixed secondary text tones; no tints, no transp
 ### Neutral
 - **Signal Ink** (#141414): text on light grounds, every rule and border, the sticky nav, the instructions section ground, the footer, command bands, tags, and solid buttons.
 - **Label White** (#ffffff): the contents section ground (the printed label), text on ink, and the hover fill of solid buttons.
-- **Aluminium** (#b3b3ae): plate and nameplate surfaces that hold screenshots and the spec sheet.
+- **Aluminium** (#b3b3ae): the spec nameplate surface.
 - **Deep Aluminium** (#7d7d78): rivet heads and the quieter rules that divide steps and outline command bands on ink.
 - **Burnt Ink** (#4a2a10): secondary text on flare (contents-strip descriptions).
 - **Quiet Ink** (#55554f): secondary text on label white (section intros).
@@ -180,13 +180,13 @@ Rows collapse rather than reflow into cards: at 960px multi-column rows stack th
 
 ## Elevation & Depth
 
-The system is flat. There are no shadows, glows, or translucent overlays at any state. Depth is conveyed only by ink contrast between flooded regions, by heavy borders, and by the physical metaphor of the aluminium plate: a grey panel framed in a 3px ink border, with four rivets at its corners, holding a screenshot window inset 18px.
+The system is flat. There are no shadows, glows, or translucent overlays at any state. Depth is conveyed only by ink contrast between flooded regions, by heavy borders, and by the physical metaphor of riveted hardware: screenshots sit in an ink bezel with a 14px inset and four rivets, and the spec sheet is an aluminium nameplate in a 6px ink border.
 
 **The Flat Ink Rule.** No box-shadow, text-shadow, filter glow, or blended gradient anywhere. Hover and focus change fill and text color, never elevation.
 
 ## Shapes
 
-Every container, button, tag, band, and plate is square-cornered (0px). Borders are thick and ink: 3px for standard rules and button outlines, 6px for section-closing rules and the spec nameplate, 2px for inner windows and secondary dividers. The only round form is the rivet (9px on plates, 14px on the nameplate, deep aluminium with an ink ring).
+Every container, button, tag, band, and plate is square-cornered (0px). Borders are thick and ink: 3px for standard rules and button outlines, 6px for section-closing rules and the spec nameplate, 2px for inner windows and secondary dividers. The only round form is the rivet (6px deep-aluminium dots on screenshot bezels, 14px with an ink ring on the nameplate).
 
 Two hard-stop stripe patterns belong to the world and are the only permitted uses of a repeating gradient: the hazard band (22px tall, -45deg, 16px ink / 16px flare stripes, no blending) that closes the hero once, and the fuse's dashed cord (10px dash, 8px gap).
 
@@ -210,8 +210,8 @@ The only home of a shell command.
 ### Tags
 - **Style:** ink chip with flare text, 3px 9px 4px padding, condensed caps at 0.85rem; a mono variant (no caps, no tracking) carries literal values such as `25 MB` or `.md`.
 
-### Aluminium Plate (signature)
-A riveted inspection plate framing a real screenshot. Aluminium panel, 3px ink border, 18px inset (12px under 520px), a 2px-ink window with the image cropped by `object-fit: cover`, four rivets at the corners, and a caption stamped into the bottom rail in condensed caps (600, 1.05rem, 0.03em). The spec sheet is the same plate at nameplate scale: 6px border, 14px rivets, generous inset.
+### Screenshot Plate (signature)
+A real screenshot riveted into an ink bezel: 14px inset (10px under 640px), the image cropped by `object-fit: cover`, four 6px deep-aluminium rivets at the corners, and a caption stamped into the bottom rail in label-white condensed caps (600, 1.05rem, 0.04em). Captures are viewport-sized frames shot at 2x (desktop 1200x760, phone 390x800), never full pages shrunk into a box; the hero plate runs the full content width and swaps to the phone capture under 640px. The spec sheet is a separate aluminium nameplate: 6px ink border, 14px rivets, generous inset.
 
 ### Pictograms
 Solid ink glyphs punched into a flare square on a 48px grid, no strokes, rendered at 56px beside each instruction step title.
@@ -232,7 +232,7 @@ A 4px cord down the left gutter of every section (3px under 720px), dashed (10px
 - **Do** flood whole sections with a single spot ink (#f38020, #141414, #ffffff, or #b3b3ae) and alternate grounds between neighbours.
 - **Do** divide content with full-width ink rules: 3px between rows, 6px to close a section head.
 - **Do** set every name, label, and button in Barlow Condensed uppercase, and running text in Barlow sentence case at a 62ch measure.
-- **Do** put real screenshots inside the riveted aluminium plate with a stamped caption rail.
+- **Do** put real screenshots, shot at the size they are shown, inside the riveted ink bezel with a stamped caption rail.
 - **Do** put every shell command in the ink command band with a flare prompt and an attached copy button.
 - **Do** mix secondary text from its ground: Burnt Ink on flare, Quiet Ink on white, Soft Paper on ink.
 - **Do** give every new section the fuse and its knot, ink on light grounds and flare on ink.
