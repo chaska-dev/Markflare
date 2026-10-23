@@ -1,0 +1,117 @@
+---
+// An aluminium inspection plate riveted around a real screenshot,
+// with its caption stamped into the bottom rail.
+interface Props {
+  src: string;
+  alt: string;
+  caption: string;
+  ratio?: string;
+  fill?: boolean;
+  position?: string;
+  eager?: boolean;
+  class?: string;
+}
+
+const { src, alt, caption, ratio, fill = false, position = 'top', eager = false, class: className } = Astro.props;
+---
+
+<figure class:list={['plate', { 'plate-fill': fill }, className]}>
+  <div class="plate-window" style={ratio ? `aspect-ratio: ${ratio}` : undefined}>
+    <img
+      src={src}
+      alt={alt}
+      loading={eager ? 'eager' : 'lazy'}
+      fetchpriority={eager ? 'high' : 'auto'}
+      decoding="async"
+      style={`object-position: ${position}`}
+    />
+  </div>
+  <figcaption class="plate-rail">{caption}</figcaption>
+  <span class="rivet r1" aria-hidden="true"></span>
+  <span class="rivet r2" aria-hidden="true"></span>
+  <span class="rivet r3" aria-hidden="true"></span>
+  <span class="rivet r4" aria-hidden="true"></span>
+</figure>
+
+<style>
+  .plate {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 0;
+    background: var(--alu);
+    border: var(--rule) solid var(--ink);
+  }
+
+  .plate-window {
+    overflow: hidden;
+    background: var(--ink);
+    border: 2px solid var(--ink);
+  }
+
+  /* A fill plate takes its height from its row instead of its own ratio. */
+  .plate-fill .plate-window {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .plate-fill .plate-window img {
+    position: absolute;
+    inset: 0;
+  }
+
+  .plate-window img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .plate-rail {
+    padding: 11px 14px 13px;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+
+  .rivet {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--alu-deep);
+    border: 2px solid var(--ink);
+  }
+
+  .r1 {
+    top: 5px;
+    left: 5px;
+  }
+  .r2 {
+    top: 5px;
+    right: 5px;
+  }
+  .r3 {
+    bottom: 5px;
+    left: 5px;
+  }
+  .r4 {
+    bottom: 5px;
+    right: 5px;
+  }
+
+  @media (max-width: 520px) {
+    .plate {
+      padding: 12px 12px 0;
+    }
+
+    .plate-rail {
+      padding: 9px 10px 11px;
+      font-size: 0.95rem;
+    }
+  }
+</style>

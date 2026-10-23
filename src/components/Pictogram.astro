@@ -1,0 +1,50 @@
+---
+// Instruction pictograms: solid ink glyphs punched into a flare-orange square,
+// like the numbered panels on an equipment label. One 48px grid, no strokes.
+interface Props {
+  name: 'download' | 'storage' | 'table' | 'plug' | 'flare';
+  size?: number;
+}
+
+const { name, size = 56 } = Astro.props;
+---
+
+<svg class="pictogram" width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+  <rect width="48" height="48" fill="var(--flare)" />
+  <g fill="var(--ink)">
+    {name === 'download' && (
+      <>
+        <path d="M20 7h8v14h7L24 33 13 21h7z" />
+        <path d="M8 31h5v6h22v-6h5v11H8z" />
+      </>
+    )}
+    {name === 'storage' && (
+      <>
+        <ellipse cx="15" cy="10" rx="10" ry="4" />
+        <path d="M5 14c0 2.2 4.5 4 10 4s10-1.8 10-4v6c0 2.2-4.5 4-10 4s-10-1.8-10-4z" />
+        <path d="M5 25c0 2.2 4.5 4 10 4s10-1.8 10-4v6c0 2.2-4.5 4-10 4s-10-1.8-10-4z" />
+        <path d="M5 36c0 2.2 4.5 4 10 4s10-1.8 10-4v2c0 2.2-4.5 4-10 4s-10-1.8-10-4z" />
+        <path d="M28 21h16l-2.8 21H30.8z" />
+        <path d="M29 20c0-6.6 3.1-11 7-11s7 4.4 7 11h-3c0-4.8-1.8-8-4-8s-4 3.2-4 8z" />
+      </>
+    )}
+    {name === 'table' && (
+      <>
+        <path d="M7 9h34v8H7z" />
+        <path d="M7 20h10v8H7zM20 20h21v8H20zM7 31h10v8H7zM20 31h21v8H20z" />
+      </>
+    )}
+    {name === 'plug' && (
+      <>
+        <path d="M15 6h5v9h-5zM28 6h5v9h-5z" />
+        <path d="M10 17h28v6c0 7.2-4.9 13-11.5 13.8V43h-5v-6.2C14.9 36 10 30.2 10 23z" />
+      </>
+    )}
+    {name === 'flare' && (
+      <>
+        <path d="M19 24h10v18H19z" />
+        <path d="M22 5h4v13h-4zM9.6 9.1l2.9-2.9 6.3 6.3-2.9 2.9zM29.2 12.5l6.3-6.3 2.9 2.9-6.3 6.3zM5 19h9v4H5zM34 19h9v4h-9z" />
+      </>
+    )}
+  </g>
+</svg>

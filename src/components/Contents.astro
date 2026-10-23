@@ -1,0 +1,169 @@
+---
+import Plate from './Plate.astro';
+import type { Copy, Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  t: Copy['contents'];
+}
+
+const { lang, t } = Astro.props;
+const shapes = [
+  { ratio: '16 / 11', position: 'top left' },
+  { ratio: '16 / 11', position: 'top left' },
+  { fill: true, position: 'top' },
+];
+---
+
+<section id="contents" class="contents frame fused" aria-labelledby="contents-title">
+  <span class="knot" aria-hidden="true"></span>
+  <div class="frame-inner">
+    <div class="head">
+      <h2 id="contents-title" class="label-title">{t.title}</h2>
+      <p class="intro">{t.intro}</p>
+    </div>
+
+    <ul class="manifest">
+      {t.items.map((item) => (
+        <li>
+          <h3>{item.name}</h3>
+          <p>{item.body}</p>
+          <span class:list={['tag', { mono: !item.plain }]}>{item.tag}</span>
+        </li>
+      ))}
+    </ul>
+
+    <div class="plates">
+      {t.plates.map((p, i) => (
+        <Plate
+          src={`/screenshots/${lang}/${p.src}.webp`}
+          alt={p.alt}
+          caption={p.caption}
+          ratio={shapes[i].ratio}
+          fill={shapes[i].fill}
+          position={shapes[i].position}
+        />
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .contents {
+    background: var(--label);
+    padding-top: clamp(64px, 8vw, 120px);
+    padding-bottom: clamp(64px, 8vw, 120px);
+  }
+
+  .contents ::selection {
+    background: var(--flare);
+    color: var(--ink);
+  }
+
+  .head {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: clamp(24px, 4vw, 64px);
+    align-items: end;
+    padding-bottom: clamp(24px, 3vw, 40px);
+    border-bottom: var(--rule-heavy) solid var(--ink);
+  }
+
+  .intro {
+    max-width: 44ch;
+    font-size: 1.15rem;
+    line-height: 1.5;
+    color: var(--ink-quiet);
+  }
+
+  .manifest li {
+    display: grid;
+    grid-template-columns: minmax(0, 3.2fr) minmax(0, 6fr) minmax(0, 2fr);
+    gap: clamp(16px, 3vw, 48px);
+    align-items: baseline;
+    padding: 20px 0 21px;
+    border-bottom: var(--rule) solid var(--ink);
+  }
+
+  .manifest h3 {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 2.3vw, 2.15rem);
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .manifest p {
+    max-width: var(--measure);
+    font-size: 1.08rem;
+    line-height: 1.5;
+  }
+
+  .tag {
+    justify-self: end;
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 9px 4px;
+    background: var(--ink);
+    color: var(--flare);
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .tag.mono {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .plates {
+    display: grid;
+    grid-template-columns: 1fr 1fr 0.4fr;
+    gap: clamp(16px, 2vw, 28px);
+    align-items: stretch;
+    margin-top: clamp(48px, 6vw, 88px);
+  }
+
+  @media (max-width: 960px) {
+    .head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .manifest li {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        'name tag'
+        'body body';
+      row-gap: 8px;
+    }
+
+    .manifest h3 {
+      grid-area: name;
+    }
+
+    .manifest p {
+      grid-area: body;
+    }
+
+    .tag {
+      grid-area: tag;
+    }
+
+    .plates {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .plates > :global(:last-child) {
+      display: none;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .plates {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

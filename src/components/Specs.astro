@@ -1,0 +1,151 @@
+---
+import type { Copy } from '../i18n';
+
+interface Props {
+  t: Copy['specs'];
+}
+
+const { t } = Astro.props;
+---
+
+<section id="specs" class="specs frame fused" aria-labelledby="specs-title">
+  <span class="knot" aria-hidden="true"></span>
+  <div class="frame-inner">
+    <div class="nameplate">
+      <h2 id="specs-title" class="label-title">{t.title}</h2>
+      <dl class="rows">
+        {t.rows.map(([k, v]) => (
+          <div class="row">
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <ul class="links">
+        {t.links.map((l) => (
+          <li><a href={l.href}>{l.label}</a></li>
+        ))}
+      </ul>
+      <span class="rivet r1" aria-hidden="true"></span>
+      <span class="rivet r2" aria-hidden="true"></span>
+      <span class="rivet r3" aria-hidden="true"></span>
+      <span class="rivet r4" aria-hidden="true"></span>
+    </div>
+  </div>
+</section>
+
+<style>
+  .specs {
+    padding-top: clamp(64px, 8vw, 120px);
+    padding-bottom: clamp(56px, 7vw, 104px);
+  }
+
+  .nameplate {
+    position: relative;
+    padding: clamp(28px, 4vw, 56px);
+    background: var(--alu);
+    border: var(--rule-heavy) solid var(--ink);
+  }
+
+  /* "Especificaciones" is one long word; it scales to fit the plate. */
+  .nameplate .label-title {
+    font-size: clamp(2rem, 8.6vw, 6.5rem);
+  }
+
+  .nameplate ::selection {
+    background: var(--ink);
+    color: var(--alu);
+  }
+
+  .rows {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: clamp(24px, 4vw, 64px);
+    margin-top: clamp(24px, 3vw, 40px);
+    border-top: var(--rule) solid var(--ink);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 9.5ch minmax(0, 1fr);
+    gap: 16px;
+    align-items: baseline;
+    padding: 13px 0 14px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .row dt {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .row dd {
+    overflow-wrap: anywhere;
+    font-size: 1.04rem;
+    line-height: 1.4;
+    font-weight: 500;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    margin-top: 28px;
+  }
+
+  .links a {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .links a:hover {
+    background: var(--ink);
+    color: var(--alu);
+    text-decoration: none;
+  }
+
+  .rivet {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--alu-deep);
+    border: 3px solid var(--ink);
+  }
+
+  .r1 {
+    top: 12px;
+    left: 12px;
+  }
+  .r2 {
+    top: 12px;
+    right: 12px;
+  }
+  .r3 {
+    bottom: 12px;
+    left: 12px;
+  }
+  .r4 {
+    bottom: 12px;
+    right: 12px;
+  }
+
+  @media (max-width: 860px) {
+    .rows {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 420px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
+    }
+  }
+</style>

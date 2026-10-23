@@ -1,0 +1,257 @@
+---
+import CopyCommand from './CopyCommand.astro';
+import Pictogram from './Pictogram.astro';
+import { readme, type Copy } from '../i18n';
+
+interface Props {
+  t: Copy;
+}
+
+const { t } = Astro.props;
+const ins = t.instructions;
+---
+
+<section id="instructions" class="instructions frame fused on-ink" aria-labelledby="instructions-title">
+  <span class="knot" aria-hidden="true"></span>
+  <div class="frame-inner">
+    <div class="head">
+      <h2 id="instructions-title" class="label-title">{ins.title}</h2>
+      <div class="method">
+        <p class="method-line">{ins.method}</p>
+        <p class="needs">{ins.needs}</p>
+      </div>
+    </div>
+
+    <ol class="steps">
+      {ins.steps.map((step, i) => (
+        <li class="step">
+          <span class="num" aria-hidden="true">{i + 1}</span>
+          <div class="step-title">
+            <Pictogram name={step.icon as any} />
+            <h3><span class="visually-hidden">{i + 1}. </span>{step.title}</h3>
+          </div>
+          <div class="step-body">
+            <p>{step.body}</p>
+            {step.code && i === 0 && <CopyCommand command={step.code} t={t.copy} class="step-cmd" />}
+            {step.code && i !== 0 && <pre class="spec-block"><code>{step.code}</code></pre>}
+            {step.note && <p class="note">{step.note}</p>}
+            {step.link && <a class="step-link" href={step.link.href}>{step.link.label}</a>}
+          </div>
+        </li>
+      ))}
+    </ol>
+
+    <div class="others">
+      <h3 class="others-title">{ins.others}</h3>
+      <div class="alt-grid">
+        {ins.alt.map((m) => (
+          <div class="alt">
+            <p class="alt-name"><a href={m.href}>{m.name}</a></p>
+            <p class="alt-body">{m.body}</p>
+            <CopyCommand command={m.code} t={t.copy} />
+          </div>
+        ))}
+      </div>
+      <a class="btn full" href={readme('deploy')}>{ins.full}</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .instructions {
+    --fuse-color: var(--flare);
+    background: var(--ink);
+    color: var(--label);
+    padding-top: clamp(64px, 8vw, 120px);
+    padding-bottom: clamp(64px, 8vw, 120px);
+  }
+
+  .head {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: clamp(24px, 4vw, 64px);
+    align-items: end;
+    padding-bottom: clamp(24px, 3vw, 40px);
+    border-bottom: var(--rule-heavy) solid var(--flare);
+  }
+
+  .label-title {
+    color: var(--flare);
+  }
+
+  .method-line {
+    font-family: var(--font-display);
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  .needs {
+    margin-top: 8px;
+    color: var(--paper-soft);
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 3.4fr) minmax(0, 7.5fr);
+    gap: clamp(16px, 3vw, 48px);
+    align-items: start;
+    padding: 28px 0 30px;
+    border-bottom: var(--rule) solid var(--alu-deep);
+  }
+
+  .num {
+    font-family: var(--font-display);
+    font-size: clamp(4rem, 7vw, 6rem);
+    font-weight: 800;
+    line-height: 0.75;
+    color: var(--flare);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .step-title {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    color: var(--flare);
+  }
+
+  .step-title h3 {
+    font-family: var(--font-display);
+    font-size: clamp(1.7rem, 2.4vw, 2.2rem);
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--label);
+  }
+
+  .step-body {
+    min-width: 0;
+  }
+
+  .step-body > p:first-child {
+    max-width: var(--measure);
+    font-size: 1.1rem;
+    line-height: 1.55;
+  }
+
+  .step-body :global(.step-cmd),
+  .spec-block {
+    margin-top: 18px;
+  }
+
+  /* Step 1 sits on ink, so its command band is outlined to stay legible. */
+  .step-body :global(.cmd) {
+    border: 2px solid var(--alu-deep);
+  }
+
+  .spec-block {
+    padding: 15px 18px;
+    border: 2px solid var(--alu-deep);
+    white-space: pre-wrap;
+    font-size: 0.88rem;
+    line-height: 1.7;
+    color: var(--label);
+  }
+
+  .note {
+    margin-top: 12px;
+    font-size: 0.98rem;
+    color: var(--paper-soft);
+  }
+
+  .step-link,
+  .alt-name a {
+    display: inline-block;
+    margin-top: 14px;
+    color: var(--flare);
+    font-weight: 600;
+    text-decoration-color: var(--flare);
+  }
+
+  .step-link:hover,
+  .alt-name a:hover {
+    color: var(--label);
+  }
+
+  .others {
+    margin-top: clamp(48px, 6vw, 80px);
+  }
+
+  .others-title {
+    font-family: var(--font-display);
+    font-size: clamp(2.4rem, 4.2vw, 3.6rem);
+    font-weight: 800;
+    line-height: 0.95;
+    text-transform: uppercase;
+    color: var(--label);
+  }
+
+  .alt-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(20px, 3vw, 40px);
+    margin-top: 16px;
+  }
+
+  .alt {
+    min-width: 0;
+    padding-top: 16px;
+    border-top: var(--rule) solid var(--alu-deep);
+  }
+
+  .alt-name {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  .alt-name a {
+    margin-top: 0;
+    text-decoration: none;
+  }
+
+  .alt-body {
+    margin: 8px 0 14px;
+    color: var(--paper-soft);
+  }
+
+  .full {
+    margin-top: clamp(32px, 4vw, 48px);
+    border-color: var(--flare);
+    background: var(--flare);
+    color: var(--ink);
+  }
+
+  .full:hover {
+    background: var(--ink);
+    color: var(--flare);
+  }
+
+  @media (max-width: 960px) {
+    .head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .step {
+      grid-template-columns: auto minmax(0, 1fr);
+      row-gap: 16px;
+    }
+
+    .step-title {
+      flex-direction: row;
+      align-items: center;
+    }
+
+    .step-body {
+      grid-column: 1 / -1;
+    }
+
+    .alt-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

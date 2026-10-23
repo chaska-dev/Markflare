@@ -3,3 +3,7 @@ dist/
 .astro/
 .DS_Store
 Thumbs.db
+
+# Impeccable review captures (regenerated per review)
+.impeccable/review/
+.impeccable/questions/

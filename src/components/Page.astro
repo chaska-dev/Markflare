@@ -1,0 +1,28 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SiteNav from './SiteNav.astro';
+import Hero from './Hero.astro';
+import Contents from './Contents.astro';
+import Instructions from './Instructions.astro';
+import Specs from './Specs.astro';
+import Close from './Close.astro';
+import { copy, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = copy[lang];
+---
+
+<Layout lang={lang}>
+  <SiteNav t={t.nav} />
+  <main id="main">
+    <Hero lang={lang} t={t} />
+    <Contents lang={lang} t={t.contents} />
+    <Instructions t={t} />
+    <Specs t={t.specs} />
+    <Close t={t} />
+  </main>
+</Layout>

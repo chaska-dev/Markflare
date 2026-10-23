@@ -1,0 +1,160 @@
+---
+import CopyCommand from './CopyCommand.astro';
+import { CLONE, REPO, ZIP, readme, type Copy } from '../i18n';
+
+interface Props {
+  t: Copy;
+}
+
+const { t } = Astro.props;
+const c = t.close;
+---
+
+<section class="close frame fused" aria-labelledby="close-title">
+  <span class="knot" aria-hidden="true"></span>
+  <div class="frame-inner">
+    <h2 id="close-title" class="close-title">{c.title}</h2>
+    <div class="close-body">
+      <p>{c.body}</p>
+      <div class="close-actions">
+        <CopyCommand command={CLONE} t={t.copy} />
+        <div class="buttons">
+          <a class="btn btn-solid" href={ZIP}>{t.hero.zip}</a>
+          <a class="btn btn-line" href={REPO}>{t.hero.github}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer frame on-ink">
+  <div class="frame-inner footer-inner">
+    <a class="brand" href={t.nav.home}>
+      <img src="/favicon.svg" alt="" width="24" height="24" />
+      <span>Markflare</span>
+    </a>
+    <ul class="footer-links">
+      <li><a href={REPO}>GitHub</a></li>
+      <li><a href={readme('deploy')}>{t.nav.instructions}</a></li>
+      <li><a href={readme('api')}>API</a></li>
+      <li><a href={readme('model-context-protocol-mcp')}>MCP</a></li>
+      <li><a href={t.nav.otherLang.href}>{t.nav.otherLang.name}</a></li>
+    </ul>
+    <p class="fine">{c.license} · {c.footer}</p>
+  </div>
+</footer>
+
+<style>
+  .close {
+    padding-top: clamp(56px, 7vw, 104px);
+    padding-bottom: clamp(64px, 8vw, 120px);
+    border-top: var(--rule-heavy) solid var(--ink);
+  }
+
+  .close-title {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(4rem, 13vw, 12rem);
+    line-height: 0.82;
+    letter-spacing: -0.015em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+
+  .close-body {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(24px, 4vw, 64px);
+    margin-top: clamp(28px, 3.4vw, 48px);
+    padding-top: clamp(20px, 2.4vw, 32px);
+    border-top: var(--rule) solid var(--ink);
+  }
+
+  .close-body > p {
+    max-width: 40ch;
+    font-size: 1.2rem;
+    line-height: 1.45;
+    font-weight: 500;
+  }
+
+  .close-actions {
+    min-width: 0;
+  }
+
+  .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .footer {
+    background: var(--ink);
+    color: var(--label);
+    padding-top: 36px;
+    padding-bottom: 40px;
+  }
+
+  .footer-inner {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px 40px;
+    align-items: center;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 26px;
+  }
+
+  .footer-links a {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--paper-soft);
+  }
+
+  .footer-links a:hover {
+    color: var(--flare);
+  }
+
+  .fine {
+    grid-column: 1 / -1;
+    padding-top: 18px;
+    border-top: 2px solid var(--alu-deep);
+    font-size: 0.92rem;
+    color: var(--paper-soft);
+  }
+
+  @media (max-width: 960px) {
+    .close-body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .footer-inner {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .footer-links {
+      justify-content: flex-start;
+    }
+  }
+</style>

@@ -1,106 +1,71 @@
 ---
+import '@fontsource/barlow-condensed/600.css';
+import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/barlow-condensed/800.css';
+import '@fontsource/barlow/400.css';
+import '@fontsource/barlow/500.css';
+import '@fontsource/barlow/600.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
 import '../styles/global.css';
+import { copy, type Lang } from '../i18n';
 
 interface Props {
-  title: string;
-  description?: string;
-  lang?: 'es' | 'en';
+  lang: Lang;
 }
 
-const {
-  title,
-  description = 'A self-hosted, block-based note-taking workspace on Cloudflare Pages + D1. Infinite pages, KaTeX formulas, code blocks, and dual theme.',
-  lang = 'es',
-} = Astro.props;
+const { lang } = Astro.props;
+const t = copy[lang];
+const alternate = lang === 'es' ? '/en' : '/';
 ---
 
 <!doctype html>
-<html lang={lang} data-theme="dark">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f38020" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" hreflang={lang === 'es' ? 'en' : 'es'} href={alternate} />
     <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
-    <meta name="description" content={description} />
-    
-    <!-- Open Graph / Social -->
+    <title>{t.meta.title}</title>
+    <meta name="description" content={t.meta.description} />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:image" content="/public/logo.svg" />
-
-    <!-- Prevent theme flash script (executed before body paint) -->
-    <script is:inline>
-      (function () {
-        try {
-          const savedTheme = localStorage.getItem('markflare_theme');
-          if (savedTheme === 'light' || savedTheme === 'dark') {
-            document.documentElement.setAttribute('data-theme', savedTheme);
-          } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-            document.documentElement.setAttribute('data-theme', 'light');
-          } else {
-            document.documentElement.setAttribute('data-theme', 'dark');
-          }
-        } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'dark');
-        }
-      })();
-    </script>
+    <meta property="og:title" content={t.meta.title} />
+    <meta property="og:description" content={t.meta.description} />
   </head>
   <body>
+    <a class="skip-link" href="#main">{lang === 'es' ? 'Saltar al contenido' : 'Skip to content'}</a>
     <slot />
 
-    <!-- Global interactive script for theme toggle and copy buttons -->
     <script>
-      // Theme toggle handler
-      function initThemeToggle() {
-        const toggleButtons = document.querySelectorAll('.theme-toggle-btn');
-        toggleButtons.forEach((btn) => {
-          btn.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', nextTheme);
-            try {
-              localStorage.setItem('markflare_theme', nextTheme);
-            } catch (e) {
-              console.error(e);
-            }
-          });
+      // Copy buttons. The button names the command it copies; the live region
+      // under it announces the result for screen readers.
+      document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+        const label = button.querySelector<HTMLElement>('[data-copy-label]');
+        const status = button.parentElement?.querySelector<HTMLElement>('[data-copy-status]');
+        const idle = label?.textContent ?? '';
+        let timer: number | undefined;
+
+        button.addEventListener('click', async () => {
+          const text = button.dataset.copy ?? '';
+          let message = button.dataset.done ?? '';
+          try {
+            await navigator.clipboard.writeText(text);
+            button.dataset.state = 'done';
+          } catch {
+            message = button.dataset.failed ?? '';
+            button.dataset.state = 'failed';
+          }
+          if (label) label.textContent = message;
+          if (status) status.textContent = message;
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => {
+            delete button.dataset.state;
+            if (label) label.textContent = idle;
+            if (status) status.textContent = '';
+          }, 2200);
         });
-      }
-
-      // Clipboard copy handler
-      function initCopyButtons() {
-        const copyButtons = document.querySelectorAll('[data-copy-target]');
-        copyButtons.forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            const textToCopy = btn.getAttribute('data-copy-target');
-            if (!textToCopy) return;
-
-            try {
-              await navigator.clipboard.writeText(textToCopy);
-              const originalText = btn.innerHTML;
-              btn.setAttribute('data-copied', 'true');
-              btn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--success);"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                <span>¡Copiado!</span>
-              `;
-              setTimeout(() => {
-                btn.removeAttribute('data-copied');
-                btn.innerHTML = originalText;
-              }, 2000);
-            } catch (err) {
-              console.error('Copy failed', err);
-            }
-          });
-        });
-      }
-
-      // Initialize on load and on view transitions if any
-      document.addEventListener('DOMContentLoaded', () => {
-        initThemeToggle();
-        initCopyButtons();
       });
     </script>
   </body>

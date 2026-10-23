@@ -1,0 +1,125 @@
+---
+// A command printed on a black band, with a copy button stamped on its end.
+import type { Copy } from '../i18n';
+
+interface Props {
+  command: string;
+  t: Copy['copy'];
+  prompt?: boolean;
+  class?: string;
+}
+
+const { command, t, prompt = true, class: className } = Astro.props;
+const lines = command.split('\n');
+// Each line wraps only at spaces and after a URL's host, never inside a token.
+const tokens = (line: string) => line.split(' ').map((word) => word.split(/(?<=\.com\/)/));
+---
+
+<div class:list={['cmd', className]}>
+  <pre class="cmd-text"><code>{lines.map((line) => (
+    <span class="cmd-line">{prompt && <span class="cmd-prompt" aria-hidden="true">$ </span>}{tokens(line).map((parts, i) => (
+      <>{i > 0 && ' '}{parts.map((part, j) => <>{j > 0 && <wbr />}<span class="tok">{part}</span></>)}</>
+    ))}</span>
+  ))}</code></pre>
+  <button
+    type="button"
+    class="cmd-copy"
+    data-copy={command}
+    data-done={t.done}
+    data-failed={t.failed}
+    aria-label={`${t.action}: ${lines[0]}`}
+  >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+      <rect x="8" y="8" width="13" height="13"></rect>
+      <path d="M16 8V3H3v13h5"></path>
+    </svg>
+    <span data-copy-label>{t.action}</span>
+  </button>
+  <span class="visually-hidden" role="status" data-copy-status></span>
+</div>
+
+<style>
+  .cmd {
+    display: flex;
+    align-items: stretch;
+    background: var(--ink);
+    color: var(--label);
+    min-width: 0;
+  }
+
+  .cmd-text {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 15px 18px;
+    font-size: 0.84rem;
+    line-height: 1.6;
+  }
+
+  /* Long commands wrap inside the band instead of scrolling it. */
+  .cmd-line {
+    display: block;
+    white-space: pre-wrap;
+  }
+
+  .tok {
+    white-space: nowrap;
+  }
+
+  .cmd-prompt {
+    color: var(--flare);
+  }
+
+  .cmd-copy {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 104px;
+    justify-content: center;
+    padding: 0 16px;
+    border: 0;
+    border-left: var(--rule) solid var(--flare);
+    background: var(--ink);
+    color: var(--flare);
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      background-color 160ms var(--ease-out),
+      color 160ms var(--ease-out);
+  }
+
+  .cmd-copy:hover {
+    background: var(--flare);
+    color: var(--ink);
+  }
+
+  .cmd-copy:focus-visible {
+    outline: 3px solid var(--flare);
+    outline-offset: -6px;
+  }
+
+  .cmd-copy[data-state='done'] {
+    background: var(--label);
+    color: var(--ink);
+  }
+
+  @media (max-width: 520px) {
+    .cmd-copy {
+      min-width: 0;
+      padding: 0 14px;
+    }
+
+    .cmd-copy span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+  }
+</style>

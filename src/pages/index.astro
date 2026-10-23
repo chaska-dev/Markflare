@@ -1,36 +1,5 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import Navbar from '../components/Navbar.astro';
-import Hero from '../components/Hero.astro';
-import FeaturesGrid from '../components/FeaturesGrid.astro';
-import Screenshots from '../components/Screenshots.astro';
-import ArchitectureSection from '../components/ArchitectureSection.astro';
-import FileStorage from '../components/FileStorage.astro';
-import DeployMethods from '../components/DeployMethods.astro';
-import SqlMigrationsSection from '../components/SqlMigrationsSection.astro';
-import ApiReference from '../components/ApiReference.astro';
-import ConfigSecrets from '../components/ConfigSecrets.astro';
-import DownloadCta from '../components/DownloadCta.astro';
-import Footer from '../components/Footer.astro';
+import Page from '../components/Page.astro';
 ---
 
-<Layout
-  title="Markflare — Notas por bloques auto-hospedadas en Cloudflare Pages + D1"
-  description="Espacio de trabajo auto-hospedado estilo Notion impulsado por Cloudflare Pages y D1 SQLite. Páginas infinitas, KaTeX, código y doble tema."
-  lang="es"
->
-  <Navbar lang="es" />
-  <main>
-    <Hero lang="es" />
-    <FeaturesGrid lang="es" />
-    <Screenshots lang="es" />
-    <ArchitectureSection lang="es" />
-    <FileStorage lang="es" />
-    <DeployMethods lang="es" />
-    <SqlMigrationsSection lang="es" />
-    <ApiReference lang="es" />
-    <ConfigSecrets lang="es" />
-    <DownloadCta lang="es" />
-  </main>
-  <Footer lang="es" />
-</Layout>
+<Page lang="es" />

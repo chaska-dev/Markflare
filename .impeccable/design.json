@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T00:00:00Z",
+  "title": "Design System: Markflare",
+  "extensions": {
+    "colorMeta": {
+      "flare": { "role": "primary", "displayName": "Flare Orange", "canonical": "#f38020", "tonalRamp": ["oklch(15% 0.04 50)", "oklch(25% 0.07 50)", "oklch(35% 0.1 50)", "oklch(45% 0.13 50)", "oklch(55% 0.16 50)", "oklch(70.5% 0.18 50)", "oklch(80% 0.12 55)", "oklch(95% 0.03 60)"] },
+      "ink": { "role": "neutral", "displayName": "Signal Ink", "canonical": "#141414", "tonalRamp": ["oklch(15% 0 0)", "oklch(25% 0 0)", "oklch(35% 0 0)", "oklch(45% 0 0)", "oklch(55% 0 0)", "oklch(65% 0 0)", "oklch(80% 0 0)", "oklch(95% 0 0)"] },
+      "label-white": { "role": "neutral", "displayName": "Label White", "canonical": "#ffffff", "tonalRamp": ["oklch(15% 0 0)", "oklch(25% 0 0)", "oklch(35% 0 0)", "oklch(45% 0 0)", "oklch(55% 0 0)", "oklch(65% 0 0)", "oklch(80% 0 0)", "oklch(100% 0 0)"] },
+      "aluminium": { "role": "neutral", "displayName": "Aluminium", "canonical": "#b3b3ae", "tonalRamp": ["oklch(15% 0.006 110)", "oklch(25% 0.006 110)", "oklch(35% 0.006 110)", "oklch(45% 0.006 110)", "oklch(58% 0.007 110)", "oklch(65% 0.006 110)", "oklch(76% 0.006 110)", "oklch(95% 0.004 110)"] },
+      "aluminium-deep": { "role": "neutral", "displayName": "Deep Aluminium", "canonical": "#7d7d78", "tonalRamp": ["oklch(15% 0.007 110)", "oklch(25% 0.007 110)", "oklch(35% 0.007 110)", "oklch(45% 0.007 110)", "oklch(58% 0.007 110)", "oklch(65% 0.007 110)", "oklch(80% 0.006 110)", "oklch(95% 0.004 110)"] },
+      "ink-soft": { "role": "neutral", "displayName": "Burnt Ink", "canonical": "#4a2a10", "tonalRamp": ["oklch(15% 0.04 58)", "oklch(25% 0.05 58)", "oklch(31% 0.06 58)", "oklch(45% 0.07 58)", "oklch(55% 0.08 58)", "oklch(65% 0.08 58)", "oklch(80% 0.05 58)", "oklch(95% 0.02 58)"] },
+      "ink-quiet": { "role": "neutral", "displayName": "Quiet Ink", "canonical": "#55554f", "tonalRamp": ["oklch(15% 0.009 110)", "oklch(25% 0.009 110)", "oklch(35% 0.009 110)", "oklch(43% 0.009 110)", "oklch(55% 0.009 110)", "oklch(65% 0.008 110)", "oklch(80% 0.006 110)", "oklch(95% 0.004 110)"] },
+      "paper-soft": { "role": "neutral", "displayName": "Soft Paper", "canonical": "#bdbdb6", "tonalRamp": ["oklch(15% 0.008 110)", "oklch(25% 0.008 110)", "oklch(35% 0.008 110)", "oklch(45% 0.008 110)", "oklch(55% 0.008 110)", "oklch(65% 0.008 110)", "oklch(79% 0.008 110)", "oklch(95% 0.004 110)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Wordmark Display", "purpose": "The full-width wordmark only; the closing call to action uses the same voice at clamp(4rem, 13vw, 12rem)." },
+      "headline": { "displayName": "Label Title", "purpose": "Section titles, uppercase and balanced; flare on ink grounds." },
+      "title": { "displayName": "Field Title", "purpose": "Manifest item names and instruction step titles." },
+      "body": { "displayName": "Body", "purpose": "Running copy at a 62ch measure; leads step up to 1.1-1.2rem at 500." },
+      "label": { "displayName": "Stamped Label", "purpose": "Nav links, buttons, plate captions, tags, spec keys. Always uppercase." },
+      "mono": { "displayName": "Command Mono", "purpose": "Commands, bindings, file names and literal values only. Ligatures off." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "House ease for all color and fill swaps." },
+      { "name": "state-swap", "value": "160ms", "purpose": "Button and copy-button fill and color transitions (nav links use 140ms)." },
+      { "name": "fuse-burn", "value": "animation: burn linear both; animation-timeline: view(); animation-range: entry 40% exit 40%", "purpose": "The fuse's solid overlay scales from 0 to 1 down the section gutter on scroll. Static and fully burned under prefers-reduced-motion or without view() support." }
+    ],
+    "breakpoints": [
+      { "name": "gh-icon-only", "value": "420px" },
+      { "name": "plate-compact", "value": "520px" },
+      { "name": "strip-single", "value": "560px" },
+      { "name": "mobile-gutter", "value": "720px" },
+      { "name": "nav-links-hide", "value": "900px" },
+      { "name": "rows-stack", "value": "960px" },
+      { "name": "strip-double", "value": "1080px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Solid Button",
+      "kind": "button",
+      "refersTo": "button-solid",
+      "description": "Primary action on light grounds: ink fill, inverts to label white on hover.",
+      "html": "<a class=\"ds-btn ds-btn-solid\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M10 3h4v9h4l-6 7-6-7h4zM4 19h16v2H4z\"/></svg>Descargar ZIP</a>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px; border: 3px solid var(--ink, #141414); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none; border-radius: 0; transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-solid { background: var(--ink, #141414); color: var(--label, #ffffff); } .ds-btn-solid:hover { background: var(--label, #ffffff); color: var(--ink, #141414); } .ds-btn:focus-visible { outline: 3px solid var(--ink, #141414); outline-offset: 3px; }"
+    },
+    {
+      "name": "Line Button",
+      "kind": "button",
+      "refersTo": "button-line",
+      "description": "Secondary action on light grounds: ink outline, floods ink with flare text on hover.",
+      "html": "<a class=\"ds-btn-line\" href=\"#\">Ver en GitHub</a>",
+      "css": ".ds-btn-line { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px; border: 3px solid var(--ink, #141414); border-radius: 0; background: transparent; color: var(--ink, #141414); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none; transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-line:hover { background: var(--ink, #141414); color: var(--flare, #f38020); } .ds-btn-line:focus-visible { outline: 3px solid var(--ink, #141414); outline-offset: 3px; }"
+    },
+    {
+      "name": "Flare Button",
+      "kind": "button",
+      "refersTo": "button-flare",
+      "description": "Action on ink grounds: flare fill with ink text, floods ink on hover.",
+      "html": "<div style=\"background:#141414;padding:24px\"><a class=\"ds-btn-flare\" href=\"#\">Guía completa en el README</a></div>",
+      "css": ".ds-btn-flare { display: inline-flex; align-items: center; min-height: 52px; padding: 0 22px; border: 3px solid var(--flare, #f38020); border-radius: 0; background: var(--flare, #f38020); color: var(--ink, #141414); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none; transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-flare:hover { background: var(--ink, #141414); color: var(--flare, #f38020); } .ds-btn-flare:focus-visible { outline: 3px solid var(--flare, #f38020); outline-offset: 3px; }"
+    },
+    {
+      "name": "Command Band",
+      "kind": "custom",
+      "refersTo": "command-band",
+      "description": "The only home of a shell command: ink band, flare prompt, attached copy button.",
+      "html": "<div class=\"ds-cmd\"><pre class=\"ds-cmd-text\"><span class=\"ds-cmd-prompt\">$ </span>git clone https://github.com/Chaska-dev/Markflare.git</pre><button class=\"ds-cmd-copy\" type=\"button\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M8 3h12v14H8zM4 7h2v12h10v2H4z\"/></svg>Copiar</button></div>",
+      "css": ".ds-cmd { display: flex; align-items: stretch; background: var(--ink, #141414); color: var(--label, #ffffff); } .ds-cmd-text { flex: 1; min-width: 0; margin: 0; padding: 15px 18px; font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 0.84rem; line-height: 1.6; white-space: pre-wrap; font-variant-ligatures: none; } .ds-cmd-prompt { color: var(--flare, #f38020); } .ds-cmd-copy { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 104px; padding: 0 16px; border: 0; border-left: 3px solid var(--flare, #f38020); background: var(--ink, #141414); color: var(--flare, #f38020); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), color 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-cmd-copy:hover { background: var(--flare, #f38020); color: var(--ink, #141414); } .ds-cmd-copy:focus-visible { outline: 3px solid var(--flare, #f38020); outline-offset: -6px; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Ink chip with flare text; mono variant carries literal values.",
+      "html": "<span class=\"ds-tag\">Árbol</span> <span class=\"ds-tag ds-tag-mono\">25 MB</span>",
+      "css": ".ds-tag { display: inline-block; padding: 3px 9px 4px; background: var(--ink, #141414); color: var(--flare, #f38020); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; border-radius: 0; } .ds-tag-mono { font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-weight: 500; letter-spacing: 0; text-transform: none; }"
+    },
+    {
+      "name": "Aluminium Plate",
+      "kind": "card",
+      "refersTo": "plate",
+      "description": "Riveted aluminium plate framing a real screenshot, caption stamped in the bottom rail.",
+      "html": "<figure class=\"ds-plate\"><div class=\"ds-plate-window\"></div><figcaption class=\"ds-plate-rail\">Captura real del editor</figcaption><span class=\"ds-rivet ds-r1\"></span><span class=\"ds-rivet ds-r2\"></span><span class=\"ds-rivet ds-r3\"></span><span class=\"ds-rivet ds-r4\"></span></figure>",
+      "css": ".ds-plate { position: relative; display: flex; flex-direction: column; margin: 0; max-width: 420px; padding: 18px 18px 0; background: var(--alu, #b3b3ae); border: 3px solid var(--ink, #141414); border-radius: 0; } .ds-plate-window { aspect-ratio: 16 / 10; background: var(--ink, #141414); border: 2px solid var(--ink, #141414); } .ds-plate-rail { padding: 11px 14px 13px; color: var(--ink, #141414); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.05rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1.2; } .ds-rivet { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--alu-deep, #7d7d78); border: 2px solid var(--ink, #141414); } .ds-r1 { top: 5px; left: 5px; } .ds-r2 { top: 5px; right: 5px; } .ds-r3 { bottom: 5px; left: 5px; } .ds-r4 { bottom: 5px; right: 5px; }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "Sticky ink bar with condensed caps links, flare language chip and outlined GitHub button.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\">Markflare</a><span class=\"ds-nav-links\"><a href=\"#\">Contenido</a><a href=\"#\">Instrucciones</a><a href=\"#\">Especificaciones</a></span><span class=\"ds-nav-lang\"><span class=\"ds-nav-current\">ES</span><a href=\"#\">EN</a></span><a class=\"ds-nav-gh\" href=\"#\">GitHub</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 28px; height: 56px; padding: 0 24px; background: var(--ink, #141414); color: var(--label, #ffffff); } .ds-nav a, .ds-nav-current { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase; text-decoration: none; } .ds-nav-brand { font-size: 1.4rem; font-weight: 800; letter-spacing: 0.02em; color: var(--label, #ffffff); } .ds-nav-links { display: flex; gap: 26px; margin-right: auto; } .ds-nav-links a, .ds-nav-lang a, .ds-nav-current { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.04em; color: var(--paper-soft, #bdbdb6); transition: color 140ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-nav-links a:hover, .ds-nav-lang a:hover { color: var(--flare, #f38020); } .ds-nav-lang { display: flex; gap: 2px; } .ds-nav-lang a, .ds-nav-current { padding: 4px 7px; } .ds-nav-current { background: var(--flare, #f38020); color: var(--ink, #141414); } .ds-nav-gh { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 2px solid var(--label, #ffffff); color: var(--label, #ffffff); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; transition: background-color 140ms, color 140ms, border-color 140ms; } .ds-nav-gh:hover { background: var(--flare, #f38020); border-color: var(--flare, #f38020); color: var(--ink, #141414); } .ds-nav a:focus-visible { outline: 3px solid var(--flare, #f38020); outline-offset: 3px; }"
+    },
+    {
+      "name": "Fuse",
+      "kind": "custom",
+      "refersTo": "fuse",
+      "description": "Dashed cord down the section gutter with a square knot; burns solid on scroll via view() timeline, static under reduced motion.",
+      "html": "<section class=\"ds-fused\"><span class=\"ds-knot\"></span><p class=\"ds-fused-body\">Section content</p></section>",
+      "css": ".ds-fused { position: relative; min-height: 220px; padding: 24px 24px 24px 56px; background: var(--flare, #f38020); --fuse-color: var(--ink, #141414); } .ds-fused::before, .ds-fused::after { content: ''; position: absolute; top: 0; bottom: 0; left: 22px; width: 4px; pointer-events: none; } .ds-fused::before { background: repeating-linear-gradient(to bottom, var(--fuse-color) 0 10px, transparent 10px 18px); } .ds-fused::after { background: var(--fuse-color); transform-origin: top; transform: scaleY(0.45); } .ds-knot { position: absolute; top: 0; left: 16px; width: 16px; height: 16px; background: var(--fuse-color); } .ds-fused-body { margin: 0; font-family: 'Barlow', 'Helvetica Neue', Arial, sans-serif; color: var(--ink, #141414); }"
+    },
+    {
+      "name": "Hazard Band",
+      "kind": "custom",
+      "refersTo": "hazard-band",
+      "description": "Hard-stop ink and flare stripes that close the hero once per page.",
+      "html": "<div class=\"ds-tape\"></div>",
+      "css": ".ds-tape { height: 22px; background: repeating-linear-gradient(-45deg, var(--ink, #141414) 0 16px, var(--flare, #f38020) 16px 32px); border-top: 3px solid var(--ink, #141414); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Signal Kit",
+    "overview": "Markflare presents like a piece of field equipment: one orange case, its parts listed on the lid, its operating instructions printed in heavy condensed capitals on a label. Every surface is a flat spot ink. Whole regions flood with flare orange, ink black, label white, or aluminium grey, and nothing is tinted, blended, or lifted. Structure comes from thick black rules and boxed panels, the way an equipment label divides its fields, not from cards floating on a background.\n\nDensity is high and confident. Headings are set huge and tight in Barlow Condensed caps, body copy stays in plain Barlow at a readable measure, and JetBrains Mono appears only where something is meant to be typed. Real product screenshots sit inside riveted aluminium plates, never as glowing mockups. The single piece of motion is the fuse, a dashed cord down the left gutter of each section that burns solid as the section scrolls past.\n\nThe world refuses the dark SaaS hero: no glowing screenshot, no gradient wash, no grid of rounded cards with soft shadows.",
+    "keyCharacteristics": [
+      "Four flat inks flood whole sections; regions alternate flare, label white, ink, aluminium.",
+      "Heavy condensed uppercase for every label, title, and button.",
+      "Thick ink rules (3px, 6px) divide content into label fields.",
+      "Square corners everywhere; the only circle is a rivet.",
+      "Real screenshots live in riveted aluminium plates with a stamped caption rail.",
+      "One signature motion: the fuse burns down the gutter on scroll."
+    ],
+    "rules": [
+      { "name": "The Flood Rule", "body": "Color is applied by region, not by sprinkle. A section takes one ground ink edge to edge; accents are the other inks, never a lighter or translucent version of the ground.", "section": "colors" },
+      { "name": "The Mixed-Secondary Rule", "body": "Secondary text is mixed from the ground it sits on (Burnt Ink on flare, Quiet Ink on white, Soft Paper on ink). Never use one neutral grey across all grounds, and never use opacity to quiet text.", "section": "colors" },
+      { "name": "The Stamped Caps Rule", "body": "Anything that names, labels, or acts is Barlow Condensed uppercase. Sentences are Barlow in sentence case. Never set body copy in caps.", "section": "typography" },
+      { "name": "The Typed-Only Mono Rule", "body": "JetBrains Mono appears only for text a user would type or read back from a terminal (commands, bindings, sizes, secret names). It is never a decorative label face.", "section": "typography" },
+      { "name": "The Label Field Rule", "body": "Content is divided by full-width ink rules, the way fields on an equipment label are divided. Rows sit between rules; they are not boxed individually.", "section": "layout" },
+      { "name": "The Flat Ink Rule", "body": "No box-shadow, text-shadow, filter glow, or blended gradient anywhere. Hover and focus change fill and text color, never elevation.", "section": "elevation" },
+      { "name": "The One Tape Rule", "body": "The hazard stripe appears once per page, as the band that closes the case. It is not a divider to repeat between sections.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do flood whole sections with a single spot ink (#f38020, #141414, #ffffff, or #b3b3ae) and alternate grounds between neighbours.",
+      "Do divide content with full-width ink rules: 3px between rows, 6px to close a section head.",
+      "Do set every name, label, and button in Barlow Condensed uppercase, and running text in Barlow sentence case at a 62ch measure.",
+      "Do put real screenshots inside the riveted aluminium plate with a stamped caption rail.",
+      "Do put every shell command in the ink command band with a flare prompt and an attached copy button.",
+      "Do mix secondary text from its ground: Burnt Ink on flare, Quiet Ink on white, Soft Paper on ink.",
+      "Do give every new section the fuse and its knot, ink on light grounds and flare on ink."
+    ],
+    "donts": [
+      "Don't use shadows, glows, blurs, or translucent tints at any state.",
+      "Don't use blended gradients. Hard-stop repeating stripes (the hazard band, the fuse dash) are the only gradient use.",
+      "Don't round corners on containers, buttons, tags, or images. Rivets are the only circles.",
+      "Don't build a dark SaaS hero with a glowing screenshot or a grid of rounded cards.",
+      "Don't use JetBrains Mono for headings or decorative labels.",
+      "Don't repeat the hazard band as a section divider; it closes the case once.",
+      "Don't quiet text with opacity or a single shared grey."
+    ]
+  }
+}
