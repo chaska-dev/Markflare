@@ -29,7 +29,7 @@
     ],
     "breakpoints": [
       { "name": "gh-icon-only", "value": "420px" },
-      { "name": "plate-compact", "value": "520px" },
+      { "name": "plate-compact", "value": "640px" },
       { "name": "strip-single", "value": "560px" },
       { "name": "mobile-gutter", "value": "720px" },
       { "name": "nav-links-hide", "value": "900px" },
@@ -79,12 +79,12 @@
       "css": ".ds-tag { display: inline-block; padding: 3px 9px 4px; background: var(--ink, #141414); color: var(--flare, #f38020); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; border-radius: 0; } .ds-tag-mono { font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-weight: 500; letter-spacing: 0; text-transform: none; }"
     },
     {
-      "name": "Aluminium Plate",
+      "name": "Screenshot Plate",
       "kind": "card",
       "refersTo": "plate",
-      "description": "Riveted aluminium plate framing a real screenshot, caption stamped in the bottom rail.",
+      "description": "Real screenshot riveted into an ink bezel, caption stamped in label white on the bottom rail. Captures are viewport-sized 2x frames, not shrunk full pages.",
       "html": "<figure class=\"ds-plate\"><div class=\"ds-plate-window\"></div><figcaption class=\"ds-plate-rail\">Captura real del editor</figcaption><span class=\"ds-rivet ds-r1\"></span><span class=\"ds-rivet ds-r2\"></span><span class=\"ds-rivet ds-r3\"></span><span class=\"ds-rivet ds-r4\"></span></figure>",
-      "css": ".ds-plate { position: relative; display: flex; flex-direction: column; margin: 0; max-width: 420px; padding: 18px 18px 0; background: var(--alu, #b3b3ae); border: 3px solid var(--ink, #141414); border-radius: 0; } .ds-plate-window { aspect-ratio: 16 / 10; background: var(--ink, #141414); border: 2px solid var(--ink, #141414); } .ds-plate-rail { padding: 11px 14px 13px; color: var(--ink, #141414); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.05rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1.2; } .ds-rivet { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--alu-deep, #7d7d78); border: 2px solid var(--ink, #141414); } .ds-r1 { top: 5px; left: 5px; } .ds-r2 { top: 5px; right: 5px; } .ds-r3 { bottom: 5px; left: 5px; } .ds-r4 { bottom: 5px; right: 5px; }"
+      "css": ".ds-plate { position: relative; display: flex; flex-direction: column; margin: 0; max-width: 420px; padding: 14px 14px 0; background: var(--ink, #141414); border-radius: 0; } .ds-plate-window { aspect-ratio: 1200 / 760; background: var(--ink, #141414); } .ds-plate-rail { padding: 11px 16px 13px; color: var(--label, #ffffff); font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 1.05rem; letter-spacing: 0.04em; text-transform: uppercase; } .ds-rivet { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--alu-deep, #7d7d78); } .ds-r1 { top: 4px; left: 4px; } .ds-r2 { top: 4px; right: 4px; } .ds-r3 { bottom: 4px; left: 4px; } .ds-r4 { bottom: 4px; right: 4px; }"
     },
     {
       "name": "Navigation",
@@ -119,7 +119,7 @@
       "Heavy condensed uppercase for every label, title, and button.",
       "Thick ink rules (3px, 6px) divide content into label fields.",
       "Square corners everywhere; the only circle is a rivet.",
-      "Real screenshots live in riveted aluminium plates with a stamped caption rail.",
+      "Real screenshots live in riveted ink bezels with a stamped caption rail; the spec sheet alone is an aluminium nameplate.",
       "One signature motion: the fuse burns down the gutter on scroll."
     ],
     "rules": [
@@ -135,7 +135,7 @@
       "Do flood whole sections with a single spot ink (#f38020, #141414, #ffffff, or #b3b3ae) and alternate grounds between neighbours.",
       "Do divide content with full-width ink rules: 3px between rows, 6px to close a section head.",
       "Do set every name, label, and button in Barlow Condensed uppercase, and running text in Barlow sentence case at a 62ch measure.",
-      "Do put real screenshots inside the riveted aluminium plate with a stamped caption rail.",
+      "Do put real screenshots, shot at the size they are shown, inside the riveted ink bezel with a stamped caption rail.",
       "Do put every shell command in the ink command band with a flare prompt and an attached copy button.",
       "Do mix secondary text from its ground: Burnt Ink on flare, Quiet Ink on white, Soft Paper on ink.",
       "Do give every new section the fuse and its knot, ink on light grounds and flare on ink."
