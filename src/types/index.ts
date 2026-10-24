@@ -52,7 +52,18 @@ export type BlockType =
   // content = a web URL. bookmark shows a link card, embed an iframe (providers
   // in utils/embed.ts).
   | 'bookmark'
-  | 'embed';
+  | 'embed'
+  // Side-by-side columns. Layout containers with no text of their own, stored as
+  // ordinary rows in the same parent_id tree: a `column_list` (top level, or under
+  // a regular block) has `column` children, and every column holds normal blocks
+  // (nested lists included) that restart at depth 0. A column_list never goes
+  // inside a column, a column never leaves its list, and a list always has two
+  // columns or more (utils/columns.ts keeps that true). Widths are
+  // props.width on each column, a fraction of the row (missing = equal share).
+  // Markdown has no equivalent, so export writes the columns' blocks one after
+  // another.
+  | 'column_list'
+  | 'column';
 
 // Page metadata cached in a bookmark block (props.preview) so the card renders
 // without asking the server again. `url` is the address it was fetched for: a
@@ -69,8 +80,10 @@ export interface BookmarkPreview {
 
 // Free-form JSON bag stored in blocks.props. Images use width/align/caption,
 // tables headerRow/headerColumn/colWidths, text blocks color, bookmarks preview,
-// embeds width; later phases will add more keys without touching the schema.
+// embeds width, columns width; later phases will add more keys without touching
+// the schema.
 export interface BlockProps {
+  // Images and embeds: px. Columns: fraction of the row (0..1).
   width?: number;
   align?: 'left' | 'center' | 'right';
   caption?: string;
@@ -143,6 +156,8 @@ export interface BlockTypeOption {
   icon: string;
   label: string;
   description: string;
+  // column_list entries: how many columns the command creates.
+  columns?: number;
 }
 
 export const BLOCK_TYPES: BlockTypeOption[] = [
@@ -165,6 +180,9 @@ export const BLOCK_TYPES: BlockTypeOption[] = [
   { type: 'math' as BlockType, labelKey: 'slash.math', descriptionKey: 'slash.mathDesc', icon: 'math', label: 'Math equation', description: 'Formula with LaTeX / KaTeX' },
   { type: 'bookmark' as BlockType, labelKey: 'slash.bookmark', descriptionKey: 'slash.bookmarkDesc', icon: 'bookmark', label: 'Web bookmark', description: 'Save a link as a visual card' },
   { type: 'embed' as BlockType, labelKey: 'slash.embed', descriptionKey: 'slash.embedDesc', icon: 'embed', label: 'Embed', description: 'Embed a video, map, design or music player' },
+  { type: 'column_list' as BlockType, columns: 2, labelKey: 'slash.columns2', descriptionKey: 'slash.columns2Desc', icon: 'columns', label: '2 columns', description: 'Two side-by-side columns' },
+  { type: 'column_list' as BlockType, columns: 3, labelKey: 'slash.columns3', descriptionKey: 'slash.columns3Desc', icon: 'columns', label: '3 columns', description: 'Three side-by-side columns' },
+  { type: 'column_list' as BlockType, columns: 4, labelKey: 'slash.columns4', descriptionKey: 'slash.columns4Desc', icon: 'columns', label: '4 columns', description: 'Four side-by-side columns' },
 ];
 
 export interface SearchResult {

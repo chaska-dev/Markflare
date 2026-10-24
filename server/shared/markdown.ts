@@ -515,6 +515,10 @@ function blockToMarkdown(block: ExportBlock, index: number): string {
 // right after a table becomes one more table row, two paragraphs become one).
 const LIST_LIKE = new Set(['bullet_list', 'numbered_list', 'todo', 'toggle']);
 
+// Column layout has no markdown form: the blocks of a column_list come out one
+// column after another, as if they were at the level of the list itself.
+const COLUMN_CONTAINERS = new Set(['column_list', 'column']);
+
 export function blocksToMarkdown(blocks: ExportBlock[]): string {
   // Group children under their parent, ordered by position. A block whose
   // parent is missing from the list is treated as a root block.
@@ -539,6 +543,15 @@ export function blocksToMarkdown(blocks: ExportBlock[]): string {
     for (const block of children.get(parent ? parent.id : null) ?? []) {
       if (visited.has(block.id)) continue;
       visited.add(block.id);
+      if (COLUMN_CONTAINERS.has(block.type)) {
+        // Set apart from what comes before and after, even from list items.
+        breakNext = true;
+        walk(block, depth);
+        numbered = 0;
+        breakNext = true;
+        prev = null;
+        continue;
+      }
       // Numbering restarts per sibling group and after any other block.
       numbered = block.type === 'numbered_list' ? numbered + 1 : 0;
       const md = blockToMarkdown(block, numbered);

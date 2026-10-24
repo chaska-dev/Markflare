@@ -113,8 +113,10 @@ export interface Move {
 
 // Tab on a selection: every root goes under its nearest previous sibling that
 // is not part of the selection itself (a run of selected siblings moves under
-// the unselected one before the run). Roots with no such sibling stay. Moved
-// blocks are appended as last children, in order.
+// the unselected one before the run). Roots with no such sibling stay, and so do
+// the ones right after a column list: a list takes no children, and skipping it
+// would make the block jump above it. Moved blocks are appended as last
+// children, in order.
 export function planIndent(blocks: Block[], rootIds: string[]): Move[] {
   const rootSet = new Set(rootIds);
   const lastChild = new Map<string, number | undefined>();
@@ -125,7 +127,7 @@ export function planIndent(blocks: Block[], rootIds: string[]): Move[] {
     const siblings = sortedChildren(blocks, block.parent_id ?? null);
     let j = siblings.findIndex(b => b.id === id) - 1;
     while (j >= 0 && rootSet.has(siblings[j].id)) j--;
-    if (j < 0) continue;
+    if (j < 0 || siblings[j].type === 'column_list') continue;
     const target = siblings[j];
     if (!lastChild.has(target.id)) {
       const kids = sortedChildren(blocks, target.id).filter(b => !rootSet.has(b.id));
@@ -139,12 +141,14 @@ export function planIndent(blocks: Block[], rootIds: string[]): Move[] {
 }
 
 // Shift+Tab on a selection: every root becomes a sibling of its parent, right
-// after it. Roots that share a parent keep their order, spread in the gap.
+// after it. Roots that share a parent keep their order, spread in the gap. The
+// blocks of a column stay in it: their parent is the column, which can't be left.
 export function planOutdent(blocks: Block[], rootIds: string[]): Move[] {
   const byParent = new Map<string, string[]>();
   for (const id of rootIds) {
     const block = blocks.find(b => b.id === id);
     if (!block || !block.parent_id) continue;
+    if (blocks.find(b => b.id === block.parent_id)?.type === 'column') continue;
     const list = byParent.get(block.parent_id);
     if (list) list.push(id);
     else byParent.set(block.parent_id, [id]);

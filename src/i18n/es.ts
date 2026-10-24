@@ -183,6 +183,7 @@ export const es: Record<TranslationKey, string> = {
   'editor.tableHeaderRow': 'Fila de cabecera',
   'editor.tableHeaderColumn': 'Columna de cabecera',
   'editor.tableResizeColumn': 'Arrastra para redimensionar, doble clic para restablecer',
+  'editor.columnResize': 'Arrastra para redimensionar, doble clic para restablecer',
   'editor.dropRelease': 'Soltá para subir',
   'editor.uploadFailed': 'No se pudo subir {{name}}',
   'editor.dismissError': 'Descartar',
@@ -271,6 +272,14 @@ export const es: Record<TranslationKey, string> = {
   'slash.bookmarkDesc': 'Guarda un enlace como tarjeta visual',
   'slash.embed': 'Incrustar',
   'slash.embedDesc': 'Incrusta un video, mapa, diseño o reproductor de música',
+  'slash.math': 'Ecuación matemática',
+  'slash.mathDesc': 'Fórmula con LaTeX',
+  'slash.columns2': '2 columnas',
+  'slash.columns2Desc': 'Dos columnas lado a lado',
+  'slash.columns3': '3 columnas',
+  'slash.columns3Desc': 'Tres columnas lado a lado',
+  'slash.columns4': '4 columnas',
+  'slash.columns4Desc': 'Cuatro columnas lado a lado',
 
   // Pegar un enlace en un párrafo vacío
   'paste.title': 'Pegar como',

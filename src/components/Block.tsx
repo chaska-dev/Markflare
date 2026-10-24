@@ -374,8 +374,9 @@ interface Props {
   onDragOver?: (id: string, e: React.DragEvent) => void;
   onDragLeave?: (id: string) => void;
   onDrop?: (id: string, e: React.DragEvent) => void;
-  // Visual drop indicator: 'top' | 'middle' | 'bottom' | null.
-  dropIndicator?: 'top' | 'middle' | 'bottom' | null;
+  // Visual drop indicator: a line above / below, a highlight (nest inside) or a
+  // vertical line on the left / right edge (new column beside the block).
+  dropIndicator?: 'top' | 'middle' | 'bottom' | 'left' | 'right' | null;
   onContentChange: (id: string, content: string) => void;
   onKeyDown: (id: string, e: React.KeyboardEvent) => void;
   onCheckedChange?: (id: string, checked: boolean) => void;

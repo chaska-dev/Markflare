@@ -381,3 +381,94 @@
   border-radius: 8px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
+
+/* ---- Columns (column_list > column) ---- */
+/* The row is a flex container; each column's share of it is set inline
+   (flex: <fraction> 1 0%), see ColumnRow. min-width: 0 lets long content wrap
+   instead of widening its column. */
+.block-columns {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  margin: 2px 0;
+}
+.block-column {
+  min-width: 0;
+}
+/* Space between columns. In the editor it also holds the divider and leaves room
+   for the next column's block handle, which sits just left of its blocks. */
+.block-column-gutter {
+  position: relative;
+  flex: 0 0 32px;
+  align-self: stretch;
+}
+.block-column-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.block-column-resize::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.block-column-resize:hover::after,
+.block-columns--resizing .block-column-resize::after {
+  background: var(--accent);
+}
+.block-columns--resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+/* Shared page: no handles, no dividers. */
+.block-columns--readonly .block-column-gutter {
+  flex-basis: 24px;
+}
+.block-columns--readonly > .block-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Drop on the left / right edge of a block: a new column beside it. */
+.block-wrapper--drop-left,
+.drop-left {
+  box-shadow: inset 3px 0 0 0 var(--accent);
+  border-radius: 4px;
+}
+.block-wrapper--drop-right,
+.drop-right {
+  box-shadow: inset -3px 0 0 0 var(--accent);
+  border-radius: 4px;
+}
+.block-wrapper--drop-left:hover,
+.drop-left:hover,
+.block-wrapper--drop-right:hover,
+.drop-right:hover {
+  background-color: transparent;
+}
+
+/* Narrow screens: the columns stack, in order. */
+@media (max-width: 639px) {
+  .block-columns {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .block-columns > .block-column {
+    flex: none !important;
+    width: 100%;
+  }
+  .block-column-gutter {
+    display: none;
+  }
+}

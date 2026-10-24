@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Block } from '../types';
 import { useScrollContainer } from '../hooks/useScrollContainer';
+import { documentOrder } from '../utils/blockSelection';
 
 interface Props {
   blocks: Block[];
@@ -21,10 +22,14 @@ export function DocumentOutline({ blocks }: Props) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useScrollContainer();
 
-  // Filter and normalize headings.
+  // Filter and normalize headings. Document order, not the list's: positions
+  // only compare among siblings, and the headings inside columns (which restart
+  // at the same positions) have to come out column by column.
   const headings: HeadingItem[] = useMemo(() => {
+    const order = new Map(documentOrder(blocks || []).map((id, i) => [id, i]));
     return (blocks || [])
       .filter(b => b.type === 'heading1' || b.type === 'heading2' || b.type === 'heading3')
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
       .map(b => {
         const clean = (b.content || '')
           .replace(/^#+\s*/, '')

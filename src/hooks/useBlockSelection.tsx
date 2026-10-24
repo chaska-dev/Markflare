@@ -20,6 +20,7 @@ import {
   withSubtrees,
 } from '../utils/blockSelection';
 import { blockColor, isColorable } from '../utils/blockColor';
+import { columnCleanup, columnOf, verticalNeighbour } from '../utils/columns';
 // Same module the backend exports with; roots whose parent is not in the list
 // are written at the top level, which is what copying a part of the page needs.
 import { blocksToMarkdown } from '../../server/shared/markdown';
@@ -30,7 +31,9 @@ import { blocksToMarkdown } from '../../server/shared/markdown';
 // stands for its whole subtree: delete, duplicate, copy, move and indent act on
 // the "roots" (selected blocks with no selected ancestor) together with their
 // descendants, while turn into and color only touch the blocks that were picked.
-// Every operation is one history entry.
+// Every operation is one history entry. Blocks inside columns are picked like any
+// other (a range may cross columns, but Shift+Arrow started in a column stays in
+// it); what an operation empties, a column or a list, is cleaned up in its entry.
 
 interface Selection {
   ids: string[];
@@ -180,6 +183,7 @@ export function useBlockSelection(deps: Deps): BlockSelection {
     const changes: Change[] = ids.map(id => ({ op: 'delete', block: blocks.find(b => b.id === id)! }));
     // A block still uploading has no content to bring back.
     const recorded = changes.filter(c => c.op === 'delete' && !d.current.hasUpload(c.block.id));
+    const cleanup = columnCleanup(blocks, changes);
 
     // Focus the block before the first one removed (or the one after).
     const order = d.current.visibleIds();
@@ -188,7 +192,7 @@ export function useBlockSelection(deps: Deps): BlockSelection {
     for (let i = first - 1; i >= 0 && !fallback; i--) if (!gone.has(order[i])) fallback = order[i];
     for (let i = first + 1; i < order.length && !fallback; i++) if (!gone.has(order[i])) fallback = order[i];
 
-    void d.current.history.perform(changes, recorded);
+    void d.current.history.perform([...changes, ...cleanup], [...recorded, ...cleanup]);
     clear();
     if (fallback) d.current.focusBlock(fallback, Number.MAX_SAFE_INTEGER);
   };
@@ -260,7 +264,7 @@ export function useBlockSelection(deps: Deps): BlockSelection {
     }
     if (changes.length === 0) return true;
     if (zone === 'middle' && blocks.find(b => b.id === targetId)?.collapsed) d.current.expandBlocks([targetId]);
-    void d.current.history.perform(changes);
+    void d.current.history.perform([...changes, ...columnCleanup(blocks, changes)]);
     return true;
   };
 
@@ -277,7 +281,10 @@ export function useBlockSelection(deps: Deps): BlockSelection {
     const order = d.current.visibleIds();
     if (extend) {
       const anchor = resolve(s.anchor);
-      const head = stepId(order, resolve(s.head), dir);
+      let head = stepId(order, resolve(s.head), dir);
+      // A range started inside a column doesn't spill into the other columns.
+      const column = columnOf(list(), anchor);
+      if (column && columnOf(list(), head)?.id !== column.id) head = resolve(s.head);
       select(rangeBetween(order, anchor, head), s.anchor, head);
       scrollTo(head);
       return;
@@ -285,7 +292,8 @@ export function useBlockSelection(deps: Deps): BlockSelection {
     const indexes = liveIds().map(id => order.indexOf(id)).filter(i => i >= 0);
     if (indexes.length === 0) return;
     const from = dir < 0 ? Math.min(...indexes) : Math.max(...indexes);
-    const next = order[Math.min(order.length - 1, Math.max(0, from + dir))];
+    // Leaving a column goes to the block before / after its list, like the arrow keys.
+    const next = verticalNeighbour(list(), order, order[from], dir) ?? order[from];
     select([next]);
     scrollTo(next);
   };
@@ -396,7 +404,9 @@ export function useBlockSelection(deps: Deps): BlockSelection {
       const emptyArea = target === root || target === main
         || target.classList.contains('page-view')
         || target.classList.contains('block-wrapper')
-        || target.classList.contains('block-gutter');
+        || target.classList.contains('block-gutter')
+        || target.classList.contains('block-columns')
+        || target.classList.contains('block-column');
       const onScrollbar = Boolean(main) && e.clientX >= main!.getBoundingClientRect().left + main!.clientWidth;
       if (!emptyArea || onScrollbar || !main) {
         if (selRef.current) clear();

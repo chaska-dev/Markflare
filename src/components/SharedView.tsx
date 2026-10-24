@@ -7,9 +7,10 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Page, Block } from '../types';
 import { buildPageTree } from '../contexts/PageContext';
-import { sortedChildren } from '../utils/blockTree';
+import { buildRenderItems, RenderItem } from '../utils/columns';
 import { DocumentIcon, ChevronDownIcon, ChevronRightIcon, LoaderIcon, NotebookIcon } from './Icons';
 import { ReadOnlyBlock } from './ReadOnlyBlock';
+import { ColumnRow } from './ColumnRow';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface ShareState {
@@ -17,26 +18,35 @@ interface ShareState {
   pages: Page[];
 }
 
-function flattenBlocks(blocks: Block[]): { block: Block; depth: number }[] {
-  const out: { block: Block; depth: number }[] = [];
-  const walk = (parentId: string | null, depth: number) => {
-    for (const b of sortedChildren(blocks, parentId)) {
-      out.push({ block: b, depth });
-      walk(b.id, depth + 1);
-    }
-  };
-  walk(null, 0);
+// Blocks in reading order. A column_list is one item holding its columns, each
+// with its own blocks (depth restarts at 0 inside them). Blocks whose parent is
+// missing still show up, at the root.
+function sharedItems(blocks: Block[]): RenderItem[] {
+  return buildRenderItems(blocks, { respectCollapsed: false, includeOrphans: true });
+}
 
-  if (out.length < blocks.length) {
-    const visited = new Set(out.map(o => o.block.id));
-    for (const b of blocks) {
-      if (!visited.has(b.id)) {
-        out.push({ block: b, depth: 0 });
-      }
-    }
-  }
-
-  return out;
+function SharedItems({ items, token }: { items: RenderItem[]; token: string }) {
+  return (
+    <>
+      {items.map(({ block, depth, columns }) => columns ? (
+        <ColumnRow
+          key={block.id}
+          columns={columns.map(column => ({
+            block: column.block,
+            children: <SharedItems items={column.items} token={token} />,
+          }))}
+        />
+      ) : (
+        <div
+          key={block.id}
+          className="shared-block-wrapper"
+          style={depth > 0 ? { paddingLeft: `${depth * 24}px` } : undefined}
+        >
+          <ReadOnlyBlock block={block} shareToken={token} />
+        </div>
+      ))}
+    </>
+  );
 }
 
 export function SharedView() {
@@ -193,15 +203,7 @@ export function SharedView() {
               {blocks.length === 0 ? (
                 <div className="shared-view-empty">{t('shared.emptyPage')}</div>
               ) : (
-                flattenBlocks(blocks).map(({ block, depth }) => (
-                  <div
-                    key={block.id}
-                    className="shared-block-wrapper"
-                    style={depth > 0 ? { paddingLeft: `${depth * 24}px` } : undefined}
-                  >
-                    <ReadOnlyBlock block={block} shareToken={token} />
-                  </div>
-                ))
+                <SharedItems items={sharedItems(blocks)} token={token} />
               )}
             </div>
           </div>

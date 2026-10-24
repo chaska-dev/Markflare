@@ -182,6 +182,7 @@ export const en = {
   'editor.tableHeaderRow': 'Header row',
   'editor.tableHeaderColumn': 'Header column',
   'editor.tableResizeColumn': 'Drag to resize, double-click to reset',
+  'editor.columnResize': 'Drag to resize, double-click to reset',
   'editor.dropRelease': 'Drop to upload',
   'editor.uploadFailed': "Couldn't upload {{name}}",
   'editor.dismissError': 'Dismiss',
@@ -270,6 +271,14 @@ export const en = {
   'slash.bookmarkDesc': 'Save a link as a visual card',
   'slash.embed': 'Embed',
   'slash.embedDesc': 'Embed a video, map, design or music player',
+  'slash.math': 'Math equation',
+  'slash.mathDesc': 'Display a math formula with LaTeX',
+  'slash.columns2': '2 columns',
+  'slash.columns2Desc': 'Two side-by-side columns',
+  'slash.columns3': '3 columns',
+  'slash.columns3Desc': 'Three side-by-side columns',
+  'slash.columns4': '4 columns',
+  'slash.columns4Desc': 'Four side-by-side columns',
 
   // Paste a link into an empty paragraph
   'paste.title': 'Paste as',

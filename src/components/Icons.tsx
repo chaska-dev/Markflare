@@ -369,6 +369,20 @@ export function TableIcon({ size = 16, ...rest }: IconProps) {
   );
 }
 
+export function ColumnsIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ scale: 1.08 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="12" y1="3" x2="12" y2="21" />
+    </motion.svg>
+  );
+}
+
 export function DividerIcon({ size = 16, ...rest }: IconProps) {
   return (
     <motion.svg

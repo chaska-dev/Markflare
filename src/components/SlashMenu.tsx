@@ -19,6 +19,7 @@ import {
   MathIcon,
   BookmarkIcon,
   EmbedIcon,
+  ColumnsIcon,
 } from './Icons';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useScrollContainer } from '../hooks/useScrollContainer';
@@ -32,8 +33,11 @@ interface Props {
   // Viewport coordinates of the bottom-left corner of the block being typed in.
   position: { top: number; left: number };
   query: string;
-  onSelect: (type: BlockType) => void;
+  // `columns` comes with the column_list entries (how many to create).
+  onSelect: (type: BlockType, columns?: number) => void;
   onClose: () => void;
+  // False inside a column, where lists of columns can't go.
+  allowColumns?: boolean;
 }
 
 // Mapea el `icon` string (definido en BLOCK_TYPES) al componente SVG
@@ -77,12 +81,14 @@ function SlashIcon({ name }: { name: string }) {
       return <BookmarkIcon size={size} />;
     case 'embed':
       return <EmbedIcon size={size} />;
+    case 'columns':
+      return <ColumnsIcon size={size} />;
     default:
       return <TextIcon size={size} />;
   }
 }
 
-export function SlashMenu({ position, query, onSelect, onClose }: Props) {
+export function SlashMenu({ position, query, onSelect, onClose, allowColumns = true }: Props) {
   const { t } = useLanguage();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -96,6 +102,7 @@ export function SlashMenu({ position, query, onSelect, onClose }: Props) {
   // Filtramos comparando contra los strings traducidos en el idioma actual,
   // más los fallbacks en español (por si alguien renderiza sin contexto).
   const filtered = BLOCK_TYPES.filter(item => {
+    if (item.columns !== undefined && !allowColumns) return false;
     const labelTranslated = t(item.labelKey).toLowerCase();
     const descTranslated = t(item.descriptionKey).toLowerCase();
     const q = query.toLowerCase();
@@ -174,7 +181,7 @@ export function SlashMenu({ position, query, onSelect, onClose }: Props) {
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (filtered[selectedIndex]) {
-          onSelect(filtered[selectedIndex].type);
+          onSelect(filtered[selectedIndex].type, filtered[selectedIndex].columns);
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -206,10 +213,10 @@ export function SlashMenu({ position, query, onSelect, onClose }: Props) {
         ) : (
           filtered.map((item, idx) => (
             <div
-              key={item.type}
+              key={`${item.type}-${item.columns ?? ''}`}
               ref={idx === selectedIndex ? activeItemRef : undefined}
               className={`slash-menu-item ${idx === selectedIndex ? 'active' : ''}`}
-              onClick={() => onSelect(item.type)}
+              onClick={() => onSelect(item.type, item.columns)}
               onMouseEnter={() => setSelectedIndex(idx)}
             >
               <div className="slash-menu-item-icon">
