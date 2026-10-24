@@ -1747,13 +1747,14 @@ body {
   background: var(--text-tertiary);
   cursor: pointer;
   opacity: 0;
+  /* Hidden grips must not catch clicks meant for the cell text below them. */
+  pointer-events: none;
   transition: opacity 0.12s ease, background 0.12s ease;
 }
-/* Wider hit area than the bar itself. */
+/* The bar is thin; the invisible hit area around it is ~16px across. */
 .block-table-grip::before {
   content: '';
   position: absolute;
-  inset: -5px;
 }
 .block-table-grip--col {
   top: 2px;
@@ -1762,6 +1763,9 @@ body {
   height: 5px;
   transform: translateX(-50%);
 }
+.block-table-grip--col::before {
+  inset: -6px -8px;
+}
 .block-table-grip--row {
   left: 2px;
   top: 50%;
@@ -1769,11 +1773,15 @@ body {
   height: 20px;
   transform: translateY(-50%);
 }
+.block-table-grip--row::before {
+  inset: -8px -6px;
+}
 .block-table-th:hover > .block-table-grip--col,
 .block-table-td:hover > .block-table-grip--col,
 .block-table tr:hover .block-table-grip--row,
 .block-table-grip.is-active {
   opacity: 1;
+  pointer-events: auto;
 }
 .block-table-grip:hover,
 .block-table-grip.is-active {
@@ -1866,6 +1874,9 @@ body {
   .block-table-add-col,
   .block-table-add-row {
     opacity: 1;
+  }
+  .block-table-grip {
+    pointer-events: auto;
   }
 }
 

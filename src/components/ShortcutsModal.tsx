@@ -55,6 +55,17 @@ function buildGroups(): Group[] {
       ],
     },
     {
+      titleKey: 'shortcuts.groupFormat',
+      rows: [
+        { keys: [mod, 'B'], labelKey: 'shortcuts.bold' },
+        { keys: [mod, 'I'], labelKey: 'shortcuts.italic' },
+        { keys: [mod, shift, 'S'], labelKey: 'shortcuts.strike' },
+        { keys: [mod, 'E'], labelKey: 'shortcuts.inlineCode' },
+        // Without a selection Ctrl/Cmd+K stays the page search.
+        { keys: [mod, 'K'], labelKey: 'shortcuts.link' },
+      ],
+    },
+    {
       titleKey: 'shortcuts.groupGeneral',
       rows: [{ keys: [mod, '/'], labelKey: 'shortcuts.help' }],
     },

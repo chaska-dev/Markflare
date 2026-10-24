@@ -491,6 +491,12 @@ function blockToMarkdown(block: ExportBlock, index: number): string {
   }
 }
 
+// Blocks that are list items in markdown. Runs of them stay on adjacent lines
+// (a tight list); every other block is a paragraph-level element and needs a
+// blank line around it, or markdown merges it with its neighbours (a paragraph
+// right after a table becomes one more table row, two paragraphs become one).
+const LIST_LIKE = new Set(['bullet_list', 'numbered_list', 'todo', 'toggle']);
+
 export function blocksToMarkdown(blocks: ExportBlock[]): string {
   // Group children under their parent, ordered by position. A block whose
   // parent is missing from the list is treated as a root block.
@@ -503,25 +509,39 @@ export function blocksToMarkdown(blocks: ExportBlock[]): string {
   }
   for (const list of children.values()) list.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
-  const out: string[] = [];
+  let out = '';
+  // The next block starts a new paragraph even if it is a list item next to
+  // one: set after an empty block, which markdown can only show as a gap.
+  let breakNext = false;
   const visited = new Set<string>();
-  const walk = (parentId: string | null, depth: number) => {
+  const walk = (parent: ExportBlock | null, depth: number) => {
     const indent = '  '.repeat(depth);
     let numbered = 0;
-    for (const block of children.get(parentId) ?? []) {
+    let prev: ExportBlock | null = null;
+    for (const block of children.get(parent ? parent.id : null) ?? []) {
       if (visited.has(block.id)) continue;
       visited.add(block.id);
       // Numbering restarts per sibling group and after any other block.
       numbered = block.type === 'numbered_list' ? numbered + 1 : 0;
       const md = blockToMarkdown(block, numbered);
-      // Tables and other empty renderings are dropped; empty paragraphs stay
-      // as blank lines.
-      if (md !== '' || block.type === 'paragraph') {
-        out.push(md.split('\n').map(l => (l ? indent + l : l)).join('\n'));
+      // Tables with no columns and other empty renderings are dropped, and so
+      // are empty paragraphs: the blank line between blocks already is the gap.
+      if (md === '') {
+        breakNext = true;
+        prev = null;
+      } else {
+        // Tight only between list items, and for the first child of a list
+        // item (it hangs under its parent). Everything else is set apart.
+        const tight = out !== '' && !breakNext
+          && (prev ? LIST_LIKE.has(prev.type) && LIST_LIKE.has(block.type) : parent !== null && LIST_LIKE.has(parent.type));
+        const text = md.split('\n').map(l => (l ? indent + l : l)).join('\n');
+        out += out === '' ? text : (tight ? '\n' : '\n\n') + text;
+        breakNext = false;
+        prev = block;
       }
-      walk(block.id, depth + 1);
+      walk(block, depth + 1);
     }
   };
   walk(null, 0);
-  return out.join('\n');
+  return out;
 }

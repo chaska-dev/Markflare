@@ -4,11 +4,20 @@ import { Block } from './Block';
 import { SlashMenu } from './SlashMenu';
 import { MentionMenu, filterMentionPages, mentionLinkMarkdown } from './MentionMenu';
 import { ShortcutsModal } from './ShortcutsModal';
+import { FormatToolbar } from './FormatToolbar';
+import { EditLinkModal } from './EditLinkModal';
 import { UploadIcon, XIcon } from './Icons';
 import { api, ApiError } from '../api/client';
 import { optimizeImage } from '../utils/imageCompress';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, MAX_PARALLEL_UPLOADS, createLimiter } from '../utils/uploads';
 import { getCaretOffset, getCaretRect, placeCaret } from '../utils/caret';
+import {
+  InlineFormat,
+  applyInlineFormat,
+  getSelectedTextRange,
+  normalizeLinkUrl,
+  cleanLinkText,
+} from '../utils/inlineFormat';
 import { collectSubtree, sortedChildren, positionBetween } from '../utils/blockTree';
 import { imageUrlFromText, imageUrlFromDrop, hasWebImageTypes } from '../utils/webImage';
 import { usePageContext } from '../contexts/PageContext';
@@ -183,6 +192,26 @@ function turnIntoShortcut(e: React.KeyboardEvent): BType | null {
   return TURN_INTO_BY_DIGIT[digit] ?? null;
 }
 
+// Blocks whose text is not inline markdown (or that have no text), so the
+// formatting shortcuts leave their keys alone.
+const NO_INLINE_FORMAT: BType[] = ['code', 'table', 'math', 'image', 'file', 'subpage', 'divider'];
+
+// Ctrl/Cmd+B bold, +I italic, +E inline code, +Shift+S strikethrough (+Shift+X
+// too, since some browsers keep Ctrl+Shift+S for themselves) and +K link, like
+// Notion. Alt is excluded: Ctrl+Alt is AltGr on many layouts.
+function inlineFormatShortcut(e: React.KeyboardEvent): InlineFormat | 'link' | null {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
+  const key = e.key.toLowerCase();
+  if (e.shiftKey) return key === 's' || key === 'x' ? 'strike' : null;
+  switch (key) {
+    case 'b': return 'bold';
+    case 'i': return 'italic';
+    case 'e': return 'code';
+    case 'k': return 'link';
+    default: return null;
+  }
+}
+
 // "@" (after whitespace or at the start) or "[[" followed by the page name
 // being typed, ending at the caret. Group 1 = "@", 2 = "[[", 3 = the query.
 const MENTION_RE = /(?:(?:^|\s)(@)|(\[\[))(?!\s)([^@[\]\n]{0,40})$/;
@@ -247,6 +276,18 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   const mentionOpen = mention !== null && mentionResults.length > 0;
 
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Link dialog opened for a text selection (Ctrl/Cmd+K or the format toolbar).
+  // start/end/text locate the selection in the block's raw text.
+  const [linkDraft, setLinkDraft] = useState<{
+    blockId: string;
+    start: number;
+    end: number;
+    text: string;
+    // Markdown link that is selected as a whole, to edit instead of nest.
+    url: string;
+    anchorRect: DOMRect;
+  } | null>(null);
 
   const blockRefs = useRef<Record<string, HTMLElement>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -462,6 +503,57 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       updaterRef.current?.debounced(id, { props });
       updaterRef.current?.flush();
     }
+  };
+
+  // Block color from the format toolbar. 'default' clears it.
+  const handleBlockColor = (id: string, color: string) => {
+    const block = blocksRef.current.find(b => b.id === id);
+    if (!block) return;
+    const props = { ...(block.props ?? {}) };
+    if (color === 'default') delete props.color;
+    else props.color = color;
+    handlePropsChange(id, props);
+  };
+
+  const handleInlineFormat = (id: string, format: InlineFormat) => {
+    const el = blockRefs.current[id];
+    if (el) applyInlineFormat(el, format);
+  };
+
+  // Ask for the URL of a link around the selected text. Nothing happens
+  // without a selection.
+  const openLinkDialog = (id: string) => {
+    const el = blockRefs.current[id];
+    const selected = el ? getSelectedTextRange(el) : null;
+    if (!el || !selected) return;
+    const rect = window.getSelection()?.getRangeAt(0).getBoundingClientRect() ?? el.getBoundingClientRect();
+    // A selection that already is `[text](url)` edits that link.
+    const existing = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(selected.text);
+    setLinkDraft({
+      blockId: id,
+      start: selected.start,
+      end: selected.end,
+      text: existing ? existing[1] : selected.text,
+      url: existing ? existing[2] : '',
+      anchorRect: rect,
+    });
+  };
+
+  const handleLinkSave = (title: string, rawUrl: string) => {
+    const draft = linkDraft;
+    if (!draft) return;
+    const block = blocksRef.current.find(b => b.id === draft.blockId);
+    const url = normalizeLinkUrl(rawUrl);
+    const text = cleanLinkText(title);
+    if (!block || !url || !text) return;
+    // The dialog was open while the selection could have moved on (remote
+    // edit, undo): don't guess where the link goes.
+    const selectedNow = block.content.slice(draft.start, draft.end);
+    const expected = draft.url ? `[${draft.text}](${draft.url})` : draft.text;
+    if (selectedNow !== expected) return;
+    const link = `[${text}](${url})`;
+    applyContent(block.id, block.content.slice(0, draft.start) + link + block.content.slice(draft.end));
+    focusBlock(block.id, draft.start + link.length);
   };
 
   const handleToggleCollapse = useCallback((id: string) => {
@@ -996,6 +1088,21 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     if (idx === -1) return;
 
     const mod = e.ctrlKey || e.metaKey;
+    const inline = inlineFormatShortcut(e);
+    if (inline) {
+      const el = blockRefs.current[id];
+      if (el && el.isContentEditable && !NO_INLINE_FORMAT.includes(blocks[idx].type)) {
+        // Ctrl/Cmd+K with nothing selected is still the page search.
+        if (inline === 'link' && !getSelectedTextRange(el)) return;
+        // Also keeps the window-level shortcuts (Ctrl/Cmd+B collapses the
+        // sidebar, Ctrl/Cmd+K opens the search) from firing as well.
+        e.preventDefault();
+        e.stopPropagation();
+        if (inline === 'link') openLinkDialog(id);
+        else applyInlineFormat(el, inline);
+        return;
+      }
+    }
     if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd') {
       // Also keeps the browser from bookmarking the page.
       e.preventDefault();
@@ -1829,6 +1936,27 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       )}
 
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      <FormatToolbar
+        onFormat={handleInlineFormat}
+        onLink={openLinkDialog}
+        onColor={handleBlockColor}
+        getColor={(id) => {
+          const color = blocksRef.current.find(b => b.id === id)?.props?.color;
+          return typeof color === 'string' ? color : undefined;
+        }}
+      />
+
+      {linkDraft && (
+        <EditLinkModal
+          open
+          initialTitle={linkDraft.text}
+          initialUrl={linkDraft.url}
+          anchorRect={linkDraft.anchorRect}
+          onSave={handleLinkSave}
+          onClose={() => setLinkDraft(null)}
+        />
+      )}
 
       {slashMenu.visible && (
         <SlashMenu

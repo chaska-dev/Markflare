@@ -1,5 +1,5 @@
 // Safe inline markdown → HTML converter. Applies only the transformations we
-// want to allow (links, bold, italic, inline code) over text already escaped
+// want to allow (links, bold, italic, strikethrough, inline code) over text already escaped
 // from HTML. The `code` block body and the link URL are re-escaped at their
 // insertion point so `<script>` can't sneak in as a tag.
 //
@@ -8,7 +8,7 @@
 //   2. inline code — protect content between backticks before applying
 //      emphasis/link (the `_` and `*` inside inline code are left alone).
 //   3. links [text](url) — reject javascript: and data: to prevent XSS.
-//   4. bold ** **, italic * *, italic _ _.
+//   4. bold ** **, strikethrough ~~ ~~, italic * *, italic _ _.
 //
 // What it does NOT do:
 //   - Block-level parsing (headings, lists, blockquotes). That lives in
@@ -27,7 +27,7 @@ function escapeHtml(s: string): string {
 
 // Block dangerous protocols in href. data: and javascript: are common XSS
 // vectors (data:text/html,... can execute JS on navigation).
-function safeHref(url: string): string | null {
+export function safeHref(url: string): string | null {
   const trimmed = url.trim();
   if (/^(https?:|mailto:|tel:|\/|\.\/|#)/i.test(trimmed)) return trimmed;
   if (/^[a-zA-Z0-9_\-./?=&%#]+$/.test(trimmed)) return trimmed;
@@ -53,7 +53,8 @@ export interface InlineOptions {
 
 export function inlineMarkdownToHtml(text: string, opts: InlineOptions = {}): string {
   if (!text) return '';
-  let out = escapeHtml(text);
+  // NUL delimits the stash placeholders below, so it can't come from the text.
+  let out = escapeHtml(text.replace(/\u0000/g, ''));
 
   const stash: string[] = [];
   const push = (html: string) => {
@@ -62,7 +63,13 @@ export function inlineMarkdownToHtml(text: string, opts: InlineOptions = {}): st
   };
 
   // 1. Inline code FIRST — protects `_` and `*` inside backticks.
-  out = out.replace(/`([^`]+)`/g, (_, code) => push(`<code class="inline-code">${code}</code>`));
+  //    `codeSource` remembers the markdown of each one for data-title below.
+  const codeSource: Record<number, string> = {};
+  out = out.replace(/`([^`]+)`/g, (_, code) => {
+    const placeholder = push(`<code class="inline-code">${code}</code>`);
+    codeSource[stash.length - 1] = `\`${code}\``;
+    return placeholder;
+  });
 
   // 2. Links [text](url). Text already escaped; URL escaped too. If safeHref
   //    returns null, keep the literal (escaped) text so the user sees
@@ -70,6 +77,9 @@ export function inlineMarkdownToHtml(text: string, opts: InlineOptions = {}): st
   out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, linkText, url) => {
     const safe = safeHref(url);
     if (safe === null) return `[${linkText}](${url})`;
+    // The link editor reads the markdown text back from data-title, so inline
+    // code in the link text goes in as its source, not as HTML.
+    const title = linkText.replace(STASH_RE, (_: string, i: string) => codeSource[Number(i)] ?? '');
     const pageMatch = PAGE_LINK_RE.exec(safe);
     if (pageMatch) {
       const pageId = pageMatch[1];
@@ -77,17 +87,20 @@ export function inlineMarkdownToHtml(text: string, opts: InlineOptions = {}): st
       const icon = opts.pageIcon?.(pageId);
       const iconHtml = icon ? `<span class="inline-link-icon">${escapeHtml(icon)}</span>` : '';
       return push(
-        `<a href="${href}" class="inline-link inline-link--page" data-page-id="${pageId}" data-url="${safe}" data-title="${linkText}">${iconHtml}${linkText}</a>`
+        `<a href="${href}" class="inline-link inline-link--page" data-page-id="${pageId}" data-url="${safe}" data-title="${title}">${iconHtml}${linkText}</a>`
       );
     }
     return push(
-      `<a href="${safe}" target="_blank" rel="noopener noreferrer" class="inline-link" data-url="${safe}" data-title="${linkText}">${linkText}</a>`
+      `<a href="${safe}" target="_blank" rel="noopener noreferrer" class="inline-link" data-url="${safe}" data-title="${title}">${linkText}</a>`
     );
   });
 
   // 3. Bold **text**. Not greedy: **foo** shouldn't match more than one pair.
   out = out.replace(/\*\*([^*\n]+)\*\*/g, (_, b) => push(`<strong>${b}</strong>`));
   out = out.replace(/__([^_\n]+)__/g, (_, b) => push(`<strong>${b}</strong>`));
+
+  // 3b. Strikethrough ~~text~~.
+  out = out.replace(/~~([^~\n]+)~~/g, (_, s) => push(`<s>${s}</s>`));
 
   // 4. Italic *text* / _text_. Don't match ** or __.
   out = out.replace(/(?<!\*)\*(?!\*)([^*\n]+)(?<!\*)\*(?!\*)/g, (_, em) =>
@@ -97,8 +110,10 @@ export function inlineMarkdownToHtml(text: string, opts: InlineOptions = {}): st
     push(`<em>${em}</em>`)
   );
 
-  // 5. Restore stashed placeholders.
-  out = out.replace(STASH_RE, (_, i) => stash[Number(i)]);
+  // 5. Restore stashed placeholders. A stashed fragment can hold earlier
+  //    placeholders (italic around bold, strikethrough around code...), which
+  //    always have a lower index, so each pass peels one level.
+  while (out.includes('\u0000')) out = out.replace(STASH_RE, (_, i) => stash[Number(i)]);
   return out;
 }
 

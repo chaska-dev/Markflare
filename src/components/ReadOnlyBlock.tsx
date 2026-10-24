@@ -12,6 +12,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { inlineMarkdownToHtml, plainTextToSafeHtml } from './inlineMarkdown';
 import { useKatexHtml } from '../utils/katexLoader';
 import { parseTableData, tableOptions, toGrid } from '../utils/table';
+import { blockColor } from '../utils/blockColor';
 
 interface Props {
   block: Block;
@@ -46,16 +47,19 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
     },
   });
 
+  // Block color from the Color menu (text blocks only); styled in editor.css.
+  const color = blockColor(block.type, block.props);
+
   switch (block.type) {
     case 'heading1':
-      return <h1 className="readonly-block readonly-h1" {...rich(block.content)} />;
+      return <h1 className="readonly-block readonly-h1" data-color={color} {...rich(block.content)} />;
     case 'heading2':
-      return <h2 className="readonly-block readonly-h2" {...rich(block.content)} />;
+      return <h2 className="readonly-block readonly-h2" data-color={color} {...rich(block.content)} />;
     case 'heading3':
-      return <h3 className="readonly-block readonly-h3" {...rich(block.content)} />;
+      return <h3 className="readonly-block readonly-h3" data-color={color} {...rich(block.content)} />;
     case 'bullet_list':
       return (
-        <div className="readonly-block readonly-list">
+        <div className="readonly-block readonly-list" data-color={color}>
           <span className="readonly-list-marker">•</span>
           <span {...rich(block.content)} />
         </div>
@@ -64,7 +68,7 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
       // Real numbering (1, 2, 3...) would require carrying an index; in the
       // read-only view we show a generic marker that still reads as ordered.
       return (
-        <div className="readonly-block readonly-list">
+        <div className="readonly-block readonly-list" data-color={color}>
           <span className="readonly-list-marker">1.</span>
           <span {...rich(block.content)} />
         </div>
@@ -73,7 +77,7 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
       // Todo: no inline markdown — checkbox + line-through is its own semantics.
       // Just escaped text.
       return (
-        <div className="readonly-block readonly-todo">
+        <div className="readonly-block readonly-todo" data-color={color}>
           <span className={`readonly-checkbox${block.checked ? ' checked' : ''}`}>
             {block.checked ? '✓' : ''}
           </span>
@@ -82,12 +86,12 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
         </div>
       );
     case 'quote':
-      return <div className="readonly-block readonly-quote" {...rich(block.content)} />;
+      return <div className="readonly-block readonly-quote" data-color={color} {...rich(block.content)} />;
     case 'callout':
       // Callout: "💡 " prefix + rich content. inlineMarkdownToHtml escapes
       // the text so the emoji is rendered as a safe literal.
       return (
-        <div className="readonly-block readonly-callout">
+        <div className="readonly-block readonly-callout" data-color={color}>
           💡 <span {...rich(block.content)} />
         </div>
       );
@@ -162,7 +166,7 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
       return <ReadOnlyTable block={block} rich={rich} />;
     case 'paragraph':
     default:
-      return <div className="readonly-block readonly-paragraph" {...rich(block.content)} />;
+      return <div className="readonly-block readonly-paragraph" data-color={color} {...rich(block.content)} />;
   }
 }
 

@@ -136,3 +136,248 @@
   border: 1px solid var(--border-color);
   border-radius: 4px;
 }
+
+/* ---- Block colors (props.color) ----
+   Muted tones in the spirit of Notion's: readable text colors and soft
+   backgrounds, one set per theme. The name in data-color picks the variable;
+   "<name>" colors the text, "<name>_background" the block's background. */
+:root,
+[data-theme="dark"] {
+  --color-gray: #979a9b;
+  --color-gray-bg: #454b4e;
+  --color-brown: #937264;
+  --color-brown-bg: #434040;
+  --color-orange: #ffa344;
+  --color-orange-bg: #594a3a;
+  --color-yellow: #ffdc49;
+  --color-yellow-bg: #59563b;
+  --color-green: #4dab9a;
+  --color-green-bg: #354c4b;
+  --color-blue: #529cca;
+  --color-blue-bg: #364954;
+  --color-purple: #9a6dd7;
+  --color-purple-bg: #443f57;
+  --color-pink: #e255a1;
+  --color-pink-bg: #533b4c;
+  --color-red: #ff7369;
+  --color-red-bg: #594141;
+}
+[data-theme="light"] {
+  --color-gray: #787774;
+  --color-gray-bg: #f1f1ef;
+  --color-brown: #9f6b53;
+  --color-brown-bg: #f4eeee;
+  --color-orange: #d9730d;
+  --color-orange-bg: #fbecdd;
+  --color-yellow: #cb912f;
+  --color-yellow-bg: #fbf3db;
+  --color-green: #448361;
+  --color-green-bg: #edf3ec;
+  --color-blue: #337ea9;
+  --color-blue-bg: #e7f3f8;
+  --color-purple: #9065b0;
+  --color-purple-bg: #f6f3f9;
+  --color-pink: #c14c8a;
+  --color-pink-bg: #faf1f5;
+  --color-red: #d44c47;
+  --color-red-bg: #fdebec;
+}
+[data-color="gray"] { --block-fg: var(--color-gray); }
+[data-color="brown"] { --block-fg: var(--color-brown); }
+[data-color="orange"] { --block-fg: var(--color-orange); }
+[data-color="yellow"] { --block-fg: var(--color-yellow); }
+[data-color="green"] { --block-fg: var(--color-green); }
+[data-color="blue"] { --block-fg: var(--color-blue); }
+[data-color="purple"] { --block-fg: var(--color-purple); }
+[data-color="pink"] { --block-fg: var(--color-pink); }
+[data-color="red"] { --block-fg: var(--color-red); }
+[data-color="gray_background"] { --block-bg: var(--color-gray-bg); }
+[data-color="brown_background"] { --block-bg: var(--color-brown-bg); }
+[data-color="orange_background"] { --block-bg: var(--color-orange-bg); }
+[data-color="yellow_background"] { --block-bg: var(--color-yellow-bg); }
+[data-color="green_background"] { --block-bg: var(--color-green-bg); }
+[data-color="blue_background"] { --block-bg: var(--color-blue-bg); }
+[data-color="purple_background"] { --block-bg: var(--color-purple-bg); }
+[data-color="pink_background"] { --block-bg: var(--color-pink-bg); }
+[data-color="red_background"] { --block-bg: var(--color-red-bg); }
+/* Not inherited from a colored block that contains the element (the block's
+   context menu is inside it). */
+[data-color="default"] {
+  --block-fg: var(--text-primary);
+  --block-bg: transparent;
+}
+
+.block-wrapper[data-color]:not([data-color$="_background"]) .block-content,
+.block-wrapper[data-color]:not([data-color$="_background"]) .block-callout,
+.readonly-block[data-color]:not([data-color$="_background"]) {
+  color: var(--block-fg);
+}
+.block-wrapper[data-color] .block-todo.checked .block-content {
+  opacity: 0.6;
+}
+.block-wrapper[data-color$="_background"] > :is(.block-content, .block-todo, .block-callout),
+.readonly-block[data-color$="_background"] {
+  background: var(--block-bg);
+  border-radius: 4px;
+  /* Lets the fill reach past the text without moving anything. */
+  box-shadow: 0 0 0 2px var(--block-bg);
+}
+.block-wrapper[data-color$="_background"] > .block-callout,
+.readonly-callout[data-color$="_background"] {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* ---- Color menu (block context menu and format toolbar) ---- */
+.color-menu {
+  display: flex;
+  gap: 8px;
+}
+.color-menu-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+}
+.color-menu-heading {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  user-select: none;
+}
+.color-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.color-menu-item:hover,
+.color-menu-item:focus-visible {
+  background: var(--bg-hover);
+}
+.color-menu-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--block-fg, var(--text-primary));
+  background: var(--block-bg, transparent);
+}
+.color-menu-swatch[data-swatch="text"] {
+  background: transparent;
+}
+.color-menu-swatch[data-swatch="background"] {
+  color: var(--text-primary);
+}
+.color-menu-check {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ---- Context menu submenu ---- */
+.context-menu-submenu-host {
+  position: relative;
+}
+.context-menu-chevron {
+  display: flex;
+  margin-left: auto;
+  color: var(--text-secondary, #999);
+}
+.context-submenu {
+  position: absolute;
+  top: -5px;
+  left: calc(100% + 2px);
+  z-index: 1;
+  width: max-content;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--bg-primary, #1f1f23);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* ---- Floating format toolbar (over a text selection) ---- */
+.format-toolbar {
+  position: fixed;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.format-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.format-toolbar-btn:hover,
+.format-toolbar-btn.is-active {
+  background: var(--bg-hover);
+}
+.format-toolbar-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+.format-toolbar-glyph--bold {
+  font-weight: 700;
+}
+.format-toolbar-glyph--italic {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+}
+.format-toolbar-glyph--strike {
+  text-decoration: line-through;
+}
+.format-toolbar-color-glyph {
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--block-fg, var(--text-primary));
+  background: var(--block-bg, transparent);
+}
+.format-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--border-color);
+}
+.format-toolbar-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}

@@ -28,8 +28,10 @@ import {
   AlignCenterIcon,
   AlignRightIcon,
   CaptionIcon,
+  PaletteIcon,
 } from './Icons';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
+import { ColorMenu } from './ColorMenu';
 import { EditLinkModal } from './EditLinkModal';
 import { ImageLightbox } from './ImageLightbox';
 import { UploadStatus } from './UploadStatus';
@@ -38,6 +40,7 @@ import { inlineMarkdownToHtml, plainTextToSafeHtml, InlineOptions } from './inli
 import { useKatexHtml } from '../utils/katexLoader';
 import { useLanguage } from '../i18n/LanguageContext';
 import { placeCaret } from '../utils/caret';
+import { blockColor, isColorable } from '../utils/blockColor';
 import {
   TableData,
   TableGrid,
@@ -820,6 +823,12 @@ export function Block({
     setMenuPos({ x: e.clientX, y: e.clientY });
   };
 
+  // Block color (text or background). 'default' clears it.
+  const color = blockColor(block.type, block.props);
+  const setBlockColor = (next: string) => {
+    onPropsChange?.(block.id, mergeProps(block.props ?? {}, { color: next === 'default' ? undefined : next }));
+  };
+
   const menuItems: ContextMenuItem[] = [
     // Transform submenu: only appears if onTransform was provided and the
     // current type is one of the transformable ones.
@@ -838,6 +847,21 @@ export function Block({
             })),
           { divider: true as const },
         ]
+      : []),
+    ...(onPropsChange && isColorable(block.type)
+      ? [{
+          label: t('ctx.color'),
+          icon: <PaletteIcon size={14} />,
+          submenu: (
+            <ColorMenu
+              value={color}
+              onSelect={(next) => {
+                setBlockColor(next);
+                setMenuPos(null);
+              }}
+            />
+          ),
+        }]
       : []),
     ...(onDuplicate
       ? [{
@@ -866,6 +890,7 @@ export function Block({
       id={`block-${block.id}`}
       data-block-id={block.id}
       data-block-type={block.type}
+      data-color={color}
       className={`block-wrapper ${dropIndicator ? `block-wrapper--drop-${dropIndicator} drop-${dropIndicator}` : ''}`}
       data-depth={depth}
       style={{ '--depth': depth } as React.CSSProperties}

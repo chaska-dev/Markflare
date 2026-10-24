@@ -11,33 +11,53 @@ export function getCaretOffset(el: HTMLElement): number | null {
   return range.toString().length;
 }
 
-// Put the caret at a character offset (clamped to the end of the text).
-export function placeCaret(el: HTMLElement, offset: number) {
+// Selected character range inside `el` (start === end for a bare caret), or
+// null when the selection is not entirely inside it.
+export function getSelectionOffsets(el: HTMLElement): { start: number; end: number } | null {
   const sel = window.getSelection();
-  if (!sel) return;
-  const range = document.createRange();
+  if (!sel || sel.rangeCount === 0 || !sel.anchorNode || !sel.focusNode) return null;
+  if (!el.contains(sel.anchorNode) || !el.contains(sel.focusNode)) return null;
+  const range = sel.getRangeAt(0);
+  const before = document.createRange();
+  before.selectNodeContents(el);
+  before.setEnd(range.startContainer, range.startOffset);
+  const start = before.toString().length;
+  return { start, end: start + range.toString().length };
+}
+
+// DOM position of a character offset: the text node holding it and the offset
+// inside that node. null when the offset is past the end of the text.
+function locateOffset(el: HTMLElement, offset: number): [Node, number] | null {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let remaining = offset;
   let node = walker.nextNode();
-  let placed = false;
   while (node) {
     const len = node.textContent?.length ?? 0;
-    if (remaining <= len) {
-      range.setStart(node, remaining);
-      placed = true;
-      break;
-    }
+    if (remaining <= len) return [node, remaining];
     remaining -= len;
     node = walker.nextNode();
   }
-  if (!placed) {
-    range.selectNodeContents(el);
-    range.collapse(false);
-  } else {
-    range.collapse(true);
-  }
+  return null;
+}
+
+// Select a character range (each end clamped to the end of the text).
+export function setSelectionOffsets(el: HTMLElement, start: number, end: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  const from = locateOffset(el, start);
+  const to = start === end ? from : locateOffset(el, end);
+  if (from) range.setStart(from[0], from[1]);
+  else range.setStart(el, el.childNodes.length);
+  if (to) range.setEnd(to[0], to[1]);
+  else range.setEnd(el, el.childNodes.length);
   sel.removeAllRanges();
   sel.addRange(range);
+}
+
+// Put the caret at a character offset (clamped to the end of the text).
+export function placeCaret(el: HTMLElement, offset: number) {
+  setSelectionOffsets(el, offset, offset);
 }
 
 // Viewport rect of the caret. A collapsed range in an empty block reports an

@@ -51,8 +51,8 @@ export type BlockType =
   | 'math';
 
 // Free-form JSON bag stored in blocks.props. Images use width/align/caption,
-// tables headerRow/headerColumn/colWidths; later phases will add more keys
-// (color, ...) without touching the schema.
+// tables headerRow/headerColumn/colWidths, text blocks color; later phases will
+// add more keys without touching the schema.
 export interface BlockProps {
   width?: number;
   align?: 'left' | 'center' | 'right';
@@ -62,6 +62,9 @@ export interface BlockProps {
   headerRow?: boolean;
   headerColumn?: boolean;
   colWidths?: number[];
+  // Text blocks: palette name of the text or background color, e.g. "blue" or
+  // "blue_background" (see utils/blockColor.ts). Missing = default.
+  color?: string;
   [key: string]: unknown;
 }
 
