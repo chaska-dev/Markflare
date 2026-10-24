@@ -1,4 +1,4 @@
-import type { Page, PageWithBlocks, Block, FileInfo, SearchResult, TrashedPage } from '../types';
+import type { Page, PageWithBlocks, Block, BlockProps, FileInfo, SearchResult, TrashedPage } from '../types';
 
 export class ApiError extends Error {
   status: number;
@@ -192,9 +192,9 @@ export const api = {
       }),
   },
   blocks: {
-    create: (pageId: string, data: { type: string; content?: string; position: number; parent_id?: string | null; language?: string }) =>
+    create: (pageId: string, data: { type: string; content?: string; position: number; parent_id?: string | null; language?: string; props?: BlockProps }) =>
       request<{ block: Block }>(`/pages/${pageId}/blocks`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Pick<Block, 'content' | 'type' | 'checked' | 'language' | 'position' | 'parent_id' | 'collapsed'>>) =>
+    update: (id: string, data: Partial<Pick<Block, 'content' | 'type' | 'checked' | 'language' | 'position' | 'parent_id' | 'collapsed' | 'props'>>) =>
       request<{ block: Block }>(`/blocks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) =>
       request<{ success: boolean }>(`/blocks/${id}`, { method: 'DELETE' }),

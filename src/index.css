@@ -263,22 +263,6 @@ body {
   background: var(--bg-hover);
 }
 
-.topbar {
-  height: var(--topbar-height);
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.topbar-breadcrumb {
-  font-size: 14px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .page-view {
   max-width: 900px;
   margin: 0 auto;
@@ -1120,24 +1104,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.logout-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-.logout-btn:hover {
-  background: var(--bg-hover);
-  color: var(--danger);
-}
 
 /* Workspace header */
 .workspace-name {
@@ -1340,29 +1306,8 @@ body {
   color: var(--text-primary);
 }
 
-/* Image block. Default 200px wide; user drags the bottom-right corner of
-   the wrapper to resize (CSS resize: both on the wrapper, not the img).
-   The img fills the wrapper at 100% and the wrapper caps at the md
-   breakpoint (768px) so it can't blow past the content column. */
-.block-image {
-  position: relative;
-  display: inline-block;
-  width: 200px;
-  max-width: 768px;
-  min-width: 80px;
-  border-radius: 4px;
-  resize: both;
-  overflow: hidden;
-  background: var(--bg-tertiary);
-  vertical-align: top;
-}
-.block-image img {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-width: 100%;
-  border-radius: 4px;
-}
+/* Image block: layout is in the "IMAGE BLOCK" section further down; the
+   resize handles, toolbar and caption are in styles/media.css. */
 .block-image img:not([src]),
 .block-image img[src=""] {
   visibility: hidden;
@@ -1469,101 +1414,6 @@ body {
 }
 .breadcrumb-icon {
   font-size: 14px;
-}
-
-.subpages-section {
-  margin-top: 48px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
-}
-.subpages-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.subpages-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.subpages-badge {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 10px;
-}
-.subpage-add-inline-btn {
-  background: none;
-  border: 1px dashed var(--border-color);
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  border-radius: 5px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.subpage-add-inline-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
-.subpages-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
-}
-.subpage-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-.subpage-card:hover {
-  background: var(--bg-hover);
-  border-color: var(--text-tertiary);
-  transform: translateY(-1px);
-}
-.subpage-card-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-.subpage-card-title {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.subpage-card-arrow {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  opacity: 0.6;
-}
-.subpage-card:hover .subpage-card-arrow {
-  color: var(--accent);
-  opacity: 1;
-}
-
-
-.subpages-container,
-.subpages-header,
-.subpages-title {
-  display: none;
 }
 
 
@@ -1689,9 +1539,6 @@ body {
   .block-content.heading1 { font-size: 26px; }
   .block-content.heading2 { font-size: 22px; }
   .block-content.heading3 { font-size: 18px; }
-  .subpages-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  }
 }
 
 @media (max-width: 767px) {
@@ -1711,9 +1558,6 @@ body {
 
   .page-actions {
     flex-wrap: wrap;
-  }
-  .subpages-grid {
-    grid-template-columns: 1fr;
   }
   .page-breadcrumbs {
     font-size: 12px;
@@ -2566,15 +2410,6 @@ body {
   border-radius: 4px;
   display: block;
 }
-.readonly-image-placeholder {
-  padding: 24px;
-  background: var(--bg-input, #0a0a0d);
-  border: 1px dashed var(--border-color, #2a2a32);
-  border-radius: 6px;
-  color: var(--text-tertiary, #6a6a72);
-  text-align: center;
-  font-size: 13px;
-}
 .readonly-file {
   display: inline-flex;
   align-items: center;
@@ -3081,9 +2916,19 @@ pre.readonly-code {
   width: 100%;
   max-width: 100%;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
   outline: none;
+}
+
+/* props.align: the figure inside is as wide as the picture (or props.width). */
+.block-image[data-align="left"],
+.readonly-image[data-align="left"] {
+  align-items: flex-start;
+}
+.block-image[data-align="right"],
+.readonly-image[data-align="right"] {
+  align-items: flex-end;
 }
 
 .block-image img,
@@ -3098,8 +2943,7 @@ pre.readonly-code {
   transition: transform 120ms ease;
 }
 
-.block-image-placeholder,
-.readonly-image-placeholder {
+.block-image-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3250,7 +3094,6 @@ pre.readonly-code {
   background: var(--bg-hover);
   color: var(--text-secondary);
 }
-
 
 
 button svg,
@@ -3565,11 +3408,6 @@ button:hover .icon-document,
   justify-content: center;
 }
 
-.cover-placeholder-icon {
-  font-size: 28px;
-  flex-shrink: 0;
-}
-
 .cover-placeholder-info {
   display: flex;
   flex-direction: column;
@@ -3882,12 +3720,6 @@ button:hover .icon-document,
   padding: 8px 0;
 }
 
-.cover-picker-hint {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
 .cover-picker-input-group {
   display: flex;
   gap: 8px;
@@ -4143,7 +3975,6 @@ button:hover .icon-document,
 }
 
 
-
 /* ============================================================
    Language switcher (sidebar footer + collapsed sidebar)
    ============================================================ */
@@ -4236,13 +4067,6 @@ button:hover .icon-document,
   right: 0;
 }
 
-.sidebar-footer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 1;
-}
 .sidebar-footer--collapsed {
   flex-direction: column;
   gap: 6px;
@@ -4848,7 +4672,6 @@ body,
 .sidebar-header,
 .sidebar-footer,
 .page-view,
-.topbar,
 .sidebar-recent-item,
 .sidebar-search-row,
 .user-menu-popover,

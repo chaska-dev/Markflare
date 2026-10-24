@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Page, Block } from '../types';
 import { buildPageTree } from '../contexts/PageContext';
+import { sortedChildren } from '../utils/blockTree';
 import { DocumentIcon, ChevronDownIcon, ChevronRightIcon, LoaderIcon, NotebookIcon } from './Icons';
 import { ReadOnlyBlock } from './ReadOnlyBlock';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -17,21 +18,9 @@ interface ShareState {
 }
 
 function flattenBlocks(blocks: Block[]): { block: Block; depth: number }[] {
-  const childrenOf = new Map<string | null, Block[]>();
-  for (const b of blocks) {
-    const key = b.parent_id ?? null;
-    const arr = childrenOf.get(key);
-    if (arr) arr.push(b);
-    else childrenOf.set(key, [b]);
-  }
-  for (const arr of childrenOf.values()) {
-    arr.sort((a, b) => a.position - b.position);
-  }
-
   const out: { block: Block; depth: number }[] = [];
   const walk = (parentId: string | null, depth: number) => {
-    const siblings = childrenOf.get(parentId) || [];
-    for (const b of siblings) {
+    for (const b of sortedChildren(blocks, parentId)) {
       out.push({ block: b, depth });
       walk(b.id, depth + 1);
     }

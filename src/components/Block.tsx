@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Block as BlockType, BlockType as BType, UploadState } from '../types';
+import { Block as BlockType, BlockType as BType, BlockProps, UploadState } from '../types';
 import { usePageContext } from '../contexts/PageContext';
 import {
   LightbulbIcon,
@@ -22,6 +22,10 @@ import {
   CheckIcon,
   MathIcon,
   ImageIcon,
+  AlignLeftIcon,
+  AlignCenterIcon,
+  AlignRightIcon,
+  CaptionIcon,
 } from './Icons';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
 import { EditLinkModal } from './EditLinkModal';
@@ -32,9 +36,14 @@ import { inlineMarkdownToHtml, plainTextToSafeHtml, InlineOptions } from './inli
 import { useKatexHtml } from '../utils/katexLoader';
 import { useLanguage } from '../i18n/LanguageContext';
 
-// Image block. Default 200px wide, drag the bottom-right corner to resize
-// (CSS resize: both), max width capped at the md breakpoint (768px).
-// Size persists per block id in localStorage.
+// Smallest width (px) the resize handles allow.
+const IMAGE_MIN_WIDTH = 80;
+const CAPTION_MAX_LENGTH = 500;
+
+// Image block, Notion-style. Without props.width it renders at the image's
+// natural width capped to the column. The two side handles resize it (width in
+// px, saved to props.width); a hover toolbar sets the alignment and opens the
+// caption. Double-clicking a handle goes back to the natural width.
 //
 // While a file is uploading the block already shows the local picture (blob:
 // URL) with a progress strip on top; `upload` is that client-only state.
@@ -43,6 +52,7 @@ function ImageBlock({
   imgSrc,
   setRef,
   onKeyDown,
+  onPropsChange,
   upload,
   onPickFile,
   onCancelUpload,
@@ -53,6 +63,7 @@ function ImageBlock({
   imgSrc: string;
   setRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (id: string, e: React.KeyboardEvent) => void;
+  onPropsChange?: (id: string, props: BlockProps) => void;
   upload?: UploadState;
   onPickFile?: (id: string) => void;
   onCancelUpload?: (id: string) => void;
@@ -63,6 +74,85 @@ function ImageBlock({
   const [zoomOpen, setZoomOpen] = useState(false);
   const closeZoom = useCallback(() => setZoomOpen(false), []);
   const alt = block.language || t('editor.imageAlt');
+
+  const props: BlockProps = block.props ?? {};
+  const align = props.align === 'left' || props.align === 'right' ? props.align : 'center';
+  const savedWidth = typeof props.width === 'number' && props.width > 0 ? props.width : undefined;
+  const caption = typeof props.caption === 'string' ? props.caption : '';
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const figureRef = useRef<HTMLElement | null>(null);
+  const captionRef = useRef<HTMLElement | null>(null);
+  // Width while a handle is being dragged. Local only: it is saved once, on
+  // pointerup, so a drag doesn't produce a request per pixel.
+  const [liveWidth, setLiveWidth] = useState<number | null>(null);
+  const resizeRef = useRef<{ startX: number; startWidth: number; side: 'left' | 'right'; max: number; width: number; moved: boolean } | null>(null);
+  // The caption stays hidden until it has text or the user asks for it.
+  const [captionOpen, setCaptionOpen] = useState(false);
+  const captionVisible = caption !== '' || captionOpen;
+
+  // The caption is uncontrolled while typing; sync it from props otherwise
+  // (first render, undo, another tab's edit) without moving the caret.
+  useEffect(() => {
+    const el = captionRef.current;
+    if (el && document.activeElement !== el && el.textContent !== caption) el.textContent = caption;
+  }, [caption, captionVisible]);
+  useEffect(() => {
+    if (captionOpen) captionRef.current?.focus();
+  }, [captionOpen]);
+
+  // Merge a change into the props bag; undefined removes the key.
+  const updateProps = (patch: Partial<BlockProps>) => {
+    const next: BlockProps = { ...props, ...patch };
+    for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
+    onPropsChange?.(block.id, next);
+  };
+
+  const startResize = (e: React.PointerEvent<HTMLDivElement>, side: 'left' | 'right') => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const figure = figureRef.current;
+    const wrapper = wrapperRef.current;
+    if (!figure || !wrapper) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const startWidth = figure.getBoundingClientRect().width;
+    resizeRef.current = {
+      startX: e.clientX,
+      startWidth,
+      side,
+      // The column the block lives in: the wrapper fills it.
+      max: Math.max(IMAGE_MIN_WIDTH, Math.floor(wrapper.getBoundingClientRect().width)),
+      width: startWidth,
+      moved: false,
+    };
+  };
+
+  const moveResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = resizeRef.current;
+    if (!r) return;
+    // A centered image grows on both sides at once, so the dragged edge has to
+    // travel twice as far to stay under the pointer.
+    const delta = (e.clientX - r.startX) * (r.side === 'right' ? 1 : -1) * (align === 'center' ? 2 : 1);
+    r.width = Math.round(Math.min(r.max, Math.max(IMAGE_MIN_WIDTH, r.startWidth + delta)));
+    r.moved = true;
+    setLiveWidth(r.width);
+  };
+
+  const endResize = (e: React.PointerEvent<HTMLDivElement>, commit: boolean) => {
+    const r = resizeRef.current;
+    if (!r) return;
+    resizeRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    setLiveWidth(null);
+    if (commit && r.moved && r.width !== savedWidth) updateProps({ width: r.width });
+  };
+
+  const commitCaption = (el: HTMLElement) => {
+    const text = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, CAPTION_MAX_LENGTH);
+    if (text !== caption) updateProps({ caption: text || undefined });
+    if (!text) setCaptionOpen(false);
+  };
 
   // Keyboard focus stays on the wrapper (that's what the editor navigates
   // with). Space is free in handleKeyDown, so it triggers the block's action:
@@ -77,12 +167,23 @@ function ImageBlock({
     onKeyDown(block.id, e);
   };
 
+  const setWrapperRef = (el: HTMLDivElement | null) => {
+    wrapperRef.current = el;
+    setRef(el);
+  };
+
+  // Hotlinked pictures: don't leak the editor's address to the other site.
+  const referrerPolicy = /^https?:/i.test(imgSrc) ? 'no-referrer' : undefined;
+  const figureWidth = liveWidth ?? savedWidth;
+  const figureStyle = figureWidth ? { width: figureWidth } : undefined;
+  const figureClass = `block-image-figure${figureWidth ? ' block-image-figure--sized' : ''}`;
+
   // Uploading, queued or failed: local preview + status strip.
   if (upload && upload.status !== 'done') {
     return (
       <div
         className="block-image block-image--upload"
-        ref={setRef as any}
+        ref={setWrapperRef}
         tabIndex={0}
         onKeyDown={handleKeyDown}
       >
@@ -111,7 +212,7 @@ function ImageBlock({
 
   if (!block.content) {
     return (
-      <div className="block-image" ref={setRef as any} tabIndex={0} onKeyDown={handleKeyDown}>
+      <div className="block-image" ref={setWrapperRef} tabIndex={0} onKeyDown={handleKeyDown}>
         <div
           className="block-image-placeholder block-image-placeholder--action"
           role="button"
@@ -128,35 +229,120 @@ function ImageBlock({
   // one has loaded, so the swap doesn't flash an empty frame.
   if (upload?.status === 'done' && upload.previewUrl) {
     return (
-      <div className="block-image" ref={setRef as any} tabIndex={0} onKeyDown={handleKeyDown}>
-        <img src={upload.previewUrl} alt={alt} decoding="async" draggable={false} />
-        <img
-          src={imgSrc}
-          alt=""
-          hidden
-          onLoad={() => onUploadSettled?.(block.id)}
-          onError={() => onUploadSettled?.(block.id)}
-        />
+      <div className="block-image" data-align={align} ref={setWrapperRef} tabIndex={0} onKeyDown={handleKeyDown}>
+        <figure className={figureClass} style={figureStyle}>
+          <img src={upload.previewUrl} alt={alt} decoding="async" draggable={false} />
+          <img
+            src={imgSrc}
+            alt=""
+            hidden
+            onLoad={() => onUploadSettled?.(block.id)}
+            onError={() => onUploadSettled?.(block.id)}
+          />
+        </figure>
       </div>
     );
   }
 
+  const alignButtons: { value: 'left' | 'center' | 'right'; label: string; icon: React.ReactNode }[] = [
+    { value: 'left', label: t('editor.imageAlignLeft'), icon: <AlignLeftIcon size={14} /> },
+    { value: 'center', label: t('editor.imageAlignCenter'), icon: <AlignCenterIcon size={14} /> },
+    { value: 'right', label: t('editor.imageAlignRight'), icon: <AlignRightIcon size={14} /> },
+  ];
+
   return (
     <div
-      className="block-image"
-      ref={setRef as any}
+      className={`block-image${liveWidth !== null ? ' is-resizing' : ''}`}
+      data-align={align}
+      ref={setWrapperRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      <img
-        className="media-zoomable"
-        src={imgSrc}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        draggable={false}
-        onClick={() => setZoomOpen(true)}
-      />
+      <figure className={figureClass} style={figureStyle} ref={figureRef}>
+        <div className="block-image-frame">
+          <img
+            className="media-zoomable"
+            src={imgSrc}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            referrerPolicy={referrerPolicy}
+            onClick={() => setZoomOpen(true)}
+          />
+          {/* Own keys must not reach the editor (Enter would add a block). */}
+          <div className="block-image-toolbar" role="toolbar" onKeyDown={(e) => e.stopPropagation()}>
+            {alignButtons.map(({ value, label, icon }) => (
+              <button
+                key={value}
+                type="button"
+                className="block-image-tool"
+                title={label}
+                aria-label={label}
+                aria-pressed={align === value}
+                onClick={() => updateProps({ align: value === 'center' ? undefined : value })}
+              >
+                {icon}
+              </button>
+            ))}
+            <span className="block-image-tool-sep" aria-hidden="true" />
+            <button
+              type="button"
+              className="block-image-tool"
+              title={t('editor.imageCaption')}
+              aria-label={t('editor.imageCaption')}
+              aria-pressed={captionVisible}
+              onClick={() => (captionVisible ? captionRef.current?.focus() : setCaptionOpen(true))}
+            >
+              <CaptionIcon size={14} />
+            </button>
+          </div>
+          {(['left', 'right'] as const).map(side => (
+            <div
+              key={side}
+              className={`block-image-handle block-image-handle--${side}`}
+              title={t('editor.imageResize')}
+              draggable={false}
+              onPointerDown={(e) => startResize(e, side)}
+              onPointerMove={moveResize}
+              onPointerUp={(e) => endResize(e, true)}
+              onPointerCancel={(e) => endResize(e, false)}
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (savedWidth !== undefined) updateProps({ width: undefined });
+              }}
+            />
+          ))}
+        </div>
+        {captionVisible && (
+          <figcaption
+            ref={captionRef}
+            className="block-image-caption"
+            contentEditable
+            suppressContentEditableWarning
+            role="textbox"
+            aria-label={t('editor.imageCaption')}
+            data-placeholder={t('editor.imageCaptionPlaceholder')}
+            onBlur={(e) => commitCaption(e.currentTarget)}
+            onKeyDown={(e) => {
+              // Single line, and the editor's block shortcuts don't apply here.
+              e.stopPropagation();
+              if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault();
+                e.currentTarget.blur();
+                wrapperRef.current?.focus();
+              }
+            }}
+            onPaste={(e) => {
+              // Plain text only, on one line; a pasted image must not become a block.
+              e.preventDefault();
+              e.stopPropagation();
+              document.execCommand('insertText', false, e.clipboardData.getData('text/plain').replace(/\s+/g, ' '));
+            }}
+          />
+        )}
+      </figure>
       {zoomOpen && <ImageLightbox src={imgSrc} alt={alt} onClose={closeZoom} />}
     </div>
   );
@@ -209,6 +395,8 @@ interface Props {
   onKeyDown: (id: string, e: React.KeyboardEvent) => void;
   onCheckedChange?: (id: string, checked: boolean) => void;
   onLanguageChange?: (id: string, language: string) => void;
+  // Replace the block's props bag (image width / alignment / caption).
+  onPropsChange?: (id: string, props: BlockProps) => void;
   // Optional paste handler. If provided, the contenteditable intercepts paste
   // and forwards (blockId + current DOM content) to the editor, which decides
   // whether to split into multiple blocks via the markdown parser or let the
@@ -253,6 +441,7 @@ export function Block({
   onKeyDown,
   onCheckedChange,
   onLanguageChange,
+  onPropsChange,
   onPaste,
   blockRef,
   isOnly,
@@ -508,6 +697,7 @@ export function Block({
           imgSrc={imgSrc}
           setRef={setRef}
           onKeyDown={onKeyDown}
+          onPropsChange={onPropsChange}
           upload={upload}
           onPickFile={onPickFile}
           onCancelUpload={onCancelUpload}
@@ -744,7 +934,8 @@ interface TableData {
   rows: string[][];
 }
 
-function parseTableData(raw: string): TableData {
+// `columnLabel(n)` names the default columns, so the caller can localise them.
+function parseTableData(raw: string, columnLabel: (n: number) => string): TableData {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) {
@@ -753,7 +944,7 @@ function parseTableData(raw: string): TableData {
   } catch {
     // fallthrough to default
   }
-  return { columns: ['Column 1', 'Column 2'], rows: [['', ''], ['', '']] };
+  return { columns: [columnLabel(1), columnLabel(2)], rows: [['', ''], ['', '']] };
 }
 
 interface TableBlockProps {
@@ -766,7 +957,8 @@ interface TableBlockProps {
 function TableBlock({ block, onContentChange, onKeyDown, blockRef }: TableBlockProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const { t } = useLanguage();
-  const data = parseTableData(block.content);
+  const columnLabel = (n: number) => t('editor.tableDefaultColumn', { n });
+  const data = parseTableData(block.content, columnLabel);
 
   const setWrapperRef = (el: HTMLDivElement | null) => {
     wrapperRef.current = el;
@@ -805,7 +997,7 @@ function TableBlock({ block, onContentChange, onKeyDown, blockRef }: TableBlockP
 
   const addColumn = () => {
     persist({
-      columns: [...data.columns, `Column ${data.columns.length + 1}`],
+      columns: [...data.columns, columnLabel(data.columns.length + 1)],
       rows: data.rows.map(r => [...r, '']),
     });
   };

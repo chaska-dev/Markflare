@@ -165,6 +165,7 @@ export const es: Record<TranslationKey, string> = {
   'editor.headingPlaceholder': 'Escribe algo...',
   'editor.tableHeaderPlaceholder': 'Cabecera',
   'editor.tableCellPlaceholder': 'Celda',
+  'editor.tableDefaultColumn': 'Columna {n}',
   'editor.addColumn': 'Añadir columna',
   'editor.removeColumn': 'Eliminar columna',
   'editor.addRow': 'Añadir fila',
@@ -175,6 +176,12 @@ export const es: Record<TranslationKey, string> = {
   'editor.fileTooLarge': '{{name}} pesa más de {{max}} MB y no se subió',
   'editor.imagePlaceholder': 'Hacé clic o escribí /image para subir',
   'editor.imageAlt': 'Imagen',
+  'editor.imageAlignLeft': 'Alinear a la izquierda',
+  'editor.imageAlignCenter': 'Centrar',
+  'editor.imageAlignRight': 'Alinear a la derecha',
+  'editor.imageCaption': 'Pie de foto',
+  'editor.imageCaptionPlaceholder': 'Escribe un pie de foto…',
+  'editor.imageResize': 'Arrastra para redimensionar, doble clic para restablecer',
   'editor.imageZoom': 'Ver en tamaño completo',
   'editor.imageClose': 'Cerrar imagen',
   'editor.uploadQueued': 'En espera...',
@@ -388,9 +395,3 @@ export const es: Record<TranslationKey, string> = {
   'page.fullWidth': 'Ancho completo',
   'page.standardWidth': 'Ancho estándar',
 };
-
-// Helper: para t(key) cuando key puede no existir en el idioma destino,
-// caemos al inglés. Útil mientras las traducciones están incompletas.
-export function getFallback(key: string): string {
-  return (en as Record<string, string>)[key] ?? key;
-}

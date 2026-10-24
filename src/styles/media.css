@@ -157,6 +157,164 @@
   border-color: var(--accent);
 }
 
+/* ---- Image block: figure, resize handles, toolbar, caption ---- */
+/* Natural width capped to the column; a saved props.width fixes it instead
+   (capped to the column too, in case the page got narrower). */
+.block-image-figure {
+  margin: 0;
+  max-width: 100%;
+}
+
+.block-image-figure img {
+  display: block;
+  max-width: 100%;
+}
+
+.block-image-figure--sized img,
+.block-image-figure--sized .media-zoom-btn {
+  width: 100%;
+}
+
+.block-image-figure--sized img {
+  max-height: none;
+}
+
+.block-image-frame {
+  position: relative;
+}
+
+/* Side handles: vertical bars centered on the edges, shown on hover/focus. */
+.block-image-handle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 64px;
+  cursor: ew-resize;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.block-image-handle::after {
+  content: '';
+  width: 5px;
+  height: 44px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.block-image-handle--left { left: 4px; }
+.block-image-handle--right { right: 4px; }
+
+/* Floating toolbar, top-right of the picture. */
+.block-image-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.block-image:hover .block-image-handle,
+.block-image:focus-within .block-image-handle,
+.block-image.is-resizing .block-image-handle {
+  opacity: 1;
+}
+
+.block-image:hover .block-image-toolbar,
+.block-image:focus-within .block-image-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* No hover on touch screens: keep the controls reachable. */
+@media (hover: none) {
+  .block-image-handle,
+  .block-image-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.block-image-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.block-image-tool:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.block-image-tool[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.block-image-tool:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.block-image-tool-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--border-color);
+}
+
+/* Caption under the picture (editable in the editor, plain in shared pages). */
+.block-image-caption {
+  margin-top: 6px;
+  padding: 2px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  text-align: center;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+
+.block-image[data-align="left"] .block-image-caption,
+.readonly-image[data-align="left"] .block-image-caption {
+  text-align: left;
+}
+
+.block-image[data-align="right"] .block-image-caption,
+.readonly-image[data-align="right"] .block-image-caption {
+  text-align: right;
+}
+
+.block-image-caption[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
 /* ---- Click to zoom ---- */
 .media-zoomable,
 .media-zoom-btn img {

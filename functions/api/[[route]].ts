@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/cloudflare-pages';
 import type { Context } from 'hono';
-import { parseMarkdownToBlocks } from '../../server/shared/markdown';
+import { parseMarkdownToBlocks, blocksToMarkdown } from '../../server/shared/markdown';
+import { parseBlockProps, serializeBlockProps } from '../../server/shared/blockProps';
 
 type Bindings = {
   DB: D1Database;
@@ -84,12 +85,12 @@ async function isDescendantBlock(db: D1Database, candidate: string, ancestor: st
   return false;
 }
 
-// Normalize a block read from D1: convert `collapsed` to boolean, leave
-// `parent_id` as-is (string or null). Used in every route that returns a
-// block to the frontend.
+// Normalize a block read from D1: convert `collapsed` to boolean, parse
+// `props` (JSON text) into an object, leave `parent_id` as-is (string or
+// null). Used in every route that returns a block to the frontend.
 function normalizeBlock(b: any): any {
   if (!b) return b;
-  return { ...b, collapsed: Boolean(b.collapsed) };
+  return { ...b, collapsed: Boolean(b.collapsed), props: parseBlockProps(b.props) };
 }
 
 // Normalize a page read from D1: the 0/1 flags become booleans so the API
@@ -714,11 +715,11 @@ app.post('/pages/:id/duplicate', async (c) => {
   for (const b of blocks) {
     stmts.push(
       db.prepare(
-        `INSERT INTO blocks (id, page_id, type, content, checked, language, position, parent_id, collapsed)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+        `INSERT INTO blocks (id, page_id, type, content, checked, language, position, parent_id, collapsed, props)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
       ).bind(
         idMap.get(b.id), newId, b.type, b.content, b.checked, b.language, b.position,
-        b.parent_id ? idMap.get(b.parent_id) ?? null : null, b.collapsed
+        b.parent_id ? idMap.get(b.parent_id) ?? null : null, b.collapsed, b.props
       )
     );
   }
@@ -829,36 +830,7 @@ app.get('/pages/:id/export', async (c) => {
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
   ).bind(id).all();
 
-  let markdown = '';
-  let numberedListCount = 1;
-
-  for (const block of blocks as any[]) {
-    if (block.type === 'numbered_list') {
-      markdown += `${numberedListCount}. ${block.content}\n`;
-      numberedListCount++;
-      continue;
-    } else {
-      numberedListCount = 1;
-    }
-
-    switch (block.type) {
-      case 'heading1': markdown += `# ${block.content}\n`; break;
-      case 'heading2': markdown += `## ${block.content}\n`; break;
-      case 'heading3': markdown += `### ${block.content}\n`; break;
-      case 'bullet_list': markdown += `- ${block.content}\n`; break;
-      case 'todo': markdown += `- [${block.checked ? 'x' : ' '}] ${block.content}\n`; break;
-      case 'code': markdown += `\`\`\`${block.language || ''}\n${block.content}\n\`\`\`\n`; break;
-      case 'math': markdown += `$$\n${block.content}\n$$\n`; break;
-      case 'quote': markdown += `> ${block.content}\n`; break;
-      case 'divider': markdown += `---\n`; break;
-      case 'callout': markdown += `> 💡 ${block.content}\n`; break;
-      case 'image': markdown += `![image](/api/files/${block.content})\n`; break;
-      case 'file': markdown += `[filename](/api/files/${block.content})\n`; break;
-      case 'paragraph': 
-      default:
-        markdown += `${block.content}\n`; break;
-    }
-  }
+  const markdown = blocksToMarkdown(blocks as any[]);
 
   return c.json({ markdown: markdown.trim(), title: page.title });
 });
@@ -992,6 +964,9 @@ app.post('/pages/:pageId/blocks', async (c) => {
   const content = typeof body.content === 'string' ? body.content : '';
   const position = Number.isFinite(body.position) ? Number(body.position) : 0;
   const language = typeof body.language === 'string' ? body.language.slice(0, 100) : '';
+  // Optional props object (width/align/caption, ...); invalid or oversized
+  // values fall back to the empty default.
+  const props = serializeBlockProps(body.props) ?? '{}';
   // Optional parent_id: if a non-empty string is sent we accept it; anything
   // else (including explicit null) means "no parent". We validate that it
   // belongs to the same page so we don't create cross-page references.
@@ -1006,8 +981,8 @@ app.post('/pages/:pageId/blocks', async (c) => {
   }
 
   await c.env.DB.prepare(
-    'INSERT INTO blocks (id, page_id, type, content, position, parent_id, language) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
-  ).bind(id, pageId, type, content, position, parent_id, language).run();
+    'INSERT INTO blocks (id, page_id, type, content, position, parent_id, language, props) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)'
+  ).bind(id, pageId, type, content, position, parent_id, language, props).run();
 
   const block: any = await c.env.DB.prepare('SELECT * FROM blocks WHERE id = ?').bind(id).first();
   return c.json({ block: normalizeBlock(block) });
@@ -1025,7 +1000,7 @@ app.put('/blocks/:id', async (c) => {
   if (typeof body.content === 'string') { updates.push(`content = ?${index++}`); params.push(body.content); }
   if (typeof body.type === 'string') { updates.push(`type = ?${index++}`); params.push(body.type.slice(0, 32)); }
   if (typeof body.checked === 'boolean') { updates.push(`checked = ?${index++}`); params.push(body.checked ? 1 : 0); }
-  if (typeof body.language === 'string') { updates.push(`language = ?${index++}`); params.push(body.language.slice(0, 32)); }
+  if (typeof body.language === 'string') { updates.push(`language = ?${index++}`); params.push(body.language.slice(0, 100)); }
   if (Number.isFinite(body.position)) { updates.push(`position = ?${index++}`); params.push(Number(body.position)); }
   // parent_id: accept a non-empty string or explicit null. Any other value
   // (undefined, number, object) we ignore to avoid corrupting the tree.
@@ -1036,7 +1011,10 @@ app.put('/blocks/:id', async (c) => {
     const parentCheck: any = await c.env.DB.prepare(
       'SELECT id, page_id FROM blocks WHERE id = ?'
     ).bind(body.parent_id).first();
-    if (parentCheck) {
+    const own: any = await c.env.DB.prepare(
+      'SELECT page_id FROM blocks WHERE id = ?'
+    ).bind(id).first();
+    if (parentCheck && own && parentCheck.page_id === own.page_id) {
       // Also avoid creating cycles: if the destination is a descendant of
       // this block, we silently reject it.
       const isCycle = await isDescendantBlock(c.env.DB, body.parent_id, id);
@@ -1049,6 +1027,10 @@ app.put('/blocks/:id', async (c) => {
   if (typeof body.collapsed === 'boolean') {
     updates.push(`collapsed = ?${index++}`); params.push(body.collapsed ? 1 : 0);
   }
+  // props replaces the whole object (the editor always sends the full bag);
+  // a non-object or oversized value is ignored.
+  const propsJson = serializeBlockProps(body.props);
+  if (propsJson !== null) { updates.push(`props = ?${index++}`); params.push(propsJson); }
 
   updates.push(`updated_at = datetime('now')`);
   params.push(id);

@@ -25,7 +25,8 @@ import {
 // can also hold an http(s) URL or a data: URI. Only a bare UUID is a storage
 // key — never treat anything else as one.
 const STORED_FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-import { parseMarkdownToBlocks } from './shared/markdown';
+import { parseMarkdownToBlocks, blocksToMarkdown } from './shared/markdown';
+import { serializeBlockProps } from './shared/blockProps';
 
 // Bootstrap
 
@@ -491,15 +492,15 @@ app.post('/api/pages/:id/duplicate', (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertBlock = db.prepare(
-    `INSERT INTO blocks (id, page_id, type, content, checked, language, position, parent_id, collapsed)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO blocks (id, page_id, type, content, checked, language, position, parent_id, collapsed, props)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   db.transaction(() => {
     insertPage.run(newId, title, src.icon, src.parent_id ?? null, position, src.cover ?? null, src.full_width, src.is_project);
     for (const b of blocks) {
       insertBlock.run(
         idMap.get(b.id), newId, b.type, b.content, b.checked, b.language, b.position,
-        b.parent_id ? idMap.get(b.parent_id) ?? null : null, b.collapsed
+        b.parent_id ? idMap.get(b.parent_id) ?? null : null, b.collapsed, b.props
       );
     }
   })();
@@ -588,34 +589,7 @@ app.get('/api/pages/:id/export', (req, res) => {
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
   ).all(id);
 
-  let markdown = '';
-  let numberedListCount = 1;
-  for (const block of blocks) {
-    if (block.type === 'numbered_list') {
-      markdown += `${numberedListCount}. ${block.content}\n`;
-      numberedListCount++;
-      continue;
-    } else {
-      numberedListCount = 1;
-    }
-    switch (block.type) {
-      case 'heading1': markdown += `# ${block.content}\n`; break;
-      case 'heading2': markdown += `## ${block.content}\n`; break;
-      case 'heading3': markdown += `### ${block.content}\n`; break;
-      case 'bullet_list': markdown += `- ${block.content}\n`; break;
-      case 'todo': markdown += `- [${block.checked ? 'x' : ' '}] ${block.content}\n`; break;
-      case 'code': markdown += `\`\`\`${block.language || ''}\n${block.content}\n\`\`\`\n`; break;
-      case 'math': markdown += `$$\n${block.content}\n$$\n`; break;
-      case 'quote': markdown += `> ${block.content}\n`; break;
-      case 'divider': markdown += `---\n`; break;
-      case 'callout': markdown += `> 💡 ${block.content}\n`; break;
-      case 'image': markdown += `![image](/api/files/${block.content})\n`; break;
-      case 'file': markdown += `[filename](/api/files/${block.content})\n`; break;
-      case 'paragraph':
-      default:
-        markdown += `${block.content}\n`; break;
-    }
-  }
+  const markdown = blocksToMarkdown(blocks);
   res.json({ markdown: markdown.trim(), title: page.title });
 });
 
@@ -717,6 +691,9 @@ app.post('/api/pages/:pageId/blocks', (req, res) => {
   const content = typeof body.content === 'string' ? body.content : '';
   const position = Number.isFinite(body.position) ? Number(body.position) : 0;
   const language = typeof body.language === 'string' ? body.language.slice(0, 100) : '';
+  // Optional props object (width/align/caption, ...); invalid or oversized
+  // values fall back to the empty default.
+  const props = serializeBlockProps(body.props) ?? '{}';
 
   let parent_id: string | null = null;
   if (typeof body.parent_id === 'string' && body.parent_id.length > 0) {
@@ -726,8 +703,8 @@ app.post('/api/pages/:pageId/blocks', (req, res) => {
     }
   }
   db.prepare(
-    'INSERT INTO blocks (id, page_id, type, content, position, parent_id, language) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, pageId, type, content, position, parent_id, language);
+    'INSERT INTO blocks (id, page_id, type, content, position, parent_id, language, props) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, pageId, type, content, position, parent_id, language, props);
 
   const block = db.prepare('SELECT * FROM blocks WHERE id = ?').get(id);
   res.json({ block: normalizeBlock(block) });
@@ -743,19 +720,26 @@ app.put('/api/blocks/:id', (req, res) => {
   if (typeof body.content === 'string') { updates.push('content = ?'); params.push(body.content); }
   if (typeof body.type === 'string') { updates.push('type = ?'); params.push(body.type.slice(0, 32)); }
   if (typeof body.checked === 'boolean') { updates.push('checked = ?'); params.push(body.checked ? 1 : 0); }
-  if (typeof body.language === 'string') { updates.push('language = ?'); params.push(body.language.slice(0, 32)); }
+  if (typeof body.language === 'string') { updates.push('language = ?'); params.push(body.language.slice(0, 100)); }
   if (Number.isFinite(body.position)) { updates.push('position = ?'); params.push(Number(body.position)); }
   if (body.parent_id === null) {
     updates.push('parent_id = ?'); params.push(null);
   } else if (typeof body.parent_id === 'string' && body.parent_id.length > 0) {
+    // The new parent must live on the same page as the block (no cross-page
+    // references) and must not be one of the block's own descendants.
     const parentCheck: any = db.prepare('SELECT id, page_id FROM blocks WHERE id = ?').get(body.parent_id);
-    if (parentCheck && !isDescendantBlock(body.parent_id, id)) {
+    const own: any = db.prepare('SELECT page_id FROM blocks WHERE id = ?').get(id);
+    if (parentCheck && own && parentCheck.page_id === own.page_id && !isDescendantBlock(body.parent_id, id)) {
       updates.push('parent_id = ?'); params.push(body.parent_id);
     }
   }
   if (typeof body.collapsed === 'boolean') {
     updates.push('collapsed = ?'); params.push(body.collapsed ? 1 : 0);
   }
+  // props replaces the whole object (the editor always sends the full bag);
+  // a non-object or oversized value is ignored.
+  const propsJson = serializeBlockProps(body.props);
+  if (propsJson !== null) { updates.push('props = ?'); params.push(propsJson); }
 
   if (updates.length > 0) {
     updates.push(`updated_at = datetime('now')`);

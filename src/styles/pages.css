@@ -77,16 +77,6 @@
   user-select: text;
 }
 
-.page-title--readonly {
-  cursor: default;
-}
-
-/* ---- Sidebar: favorites ---- */
-.sidebar-favorite-star {
-  flex-shrink: 0;
-  color: var(--accent);
-}
-
 /* ---- Sidebar: trash entry ---- */
 .sidebar-trash-row {
   display: flex;

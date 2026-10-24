@@ -50,6 +50,15 @@ export type BlockType =
   | 'toggle'
   | 'math';
 
+// Free-form JSON bag stored in blocks.props. Images use width/align/caption;
+// later phases will add more keys (color, ...) without touching the schema.
+export interface BlockProps {
+  width?: number;
+  align?: 'left' | 'center' | 'right';
+  caption?: string;
+  [key: string]: unknown;
+}
+
 export interface Block {
   id: string;
   page_id: string;
@@ -63,6 +72,7 @@ export interface Block {
   parent_id: string | null;
   // collapsed: estado del chevron. true = hijos ocultos.
   collapsed: boolean;
+  props: BlockProps;
   created_at: string;
   updated_at: string;
 }

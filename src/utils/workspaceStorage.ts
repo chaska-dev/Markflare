@@ -72,15 +72,6 @@ export function removeRecentPage(id: string) {
   }
 }
 
-export function clearRecentPages() {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.RECENTS);
-    dispatchChange(STORAGE_EVENTS.RECENTS_CHANGED);
-  } catch (e) {
-    console.error('Clear recents error:', e);
-  }
-}
-
 // Legacy projects / covers
 //
 // Projects and covers used to live only in this browser's localStorage, so they

@@ -544,6 +544,7 @@ transaction. They are idempotent, so re-running is safe.
 | `0004_shares.sql` | `page_shares` — public share tokens with a `revoked` tombstone |
 | `0005_api_tokens.sql` | `api_tokens` — tokens for the MCP server and CLI integrations |
 | `0006_page_features.sql` | `pages.deleted_at` (Trash), `is_favorite`, `full_width`, `is_project`, `cover` + index |
+| `0007_block_props.sql` | `blocks.props` — JSON bag for per-block settings (image width / alignment / caption) |
 
 > **`0006` is required before deploying this version.** The API now filters on
 > `pages.deleted_at`, so against a D1 that has not applied it every page request fails with
@@ -551,6 +552,9 @@ transaction. They are idempotent, so re-running is safe.
 > statements (SQLite cannot make those idempotent), so if you apply migrations by hand in the
 > dashboard, run it exactly once. The local server self-heals a half-applied dev database
 > (`healSchema()` in `server/db.ts`), so `pnpm run dev` needs no extra step.
+>
+> The same goes for `0007`: block create/update queries now read and write `blocks.props`,
+> so run `pnpm run db:migrate:prod` before deploying.
 
 To apply them to a remote D1 from a terminal:
 

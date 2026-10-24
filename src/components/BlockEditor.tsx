@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Block as BlockType, BlockType as BType, UploadState, FileInfo, Page } from '../types';
+import { Block as BlockType, BlockType as BType, BlockProps, UploadState, FileInfo, Page } from '../types';
 import { Block } from './Block';
 import { SlashMenu } from './SlashMenu';
 import { MentionMenu, filterMentionPages, mentionLinkMarkdown } from './MentionMenu';
@@ -10,6 +10,7 @@ import { optimizeImage } from '../utils/imageCompress';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, MAX_PARALLEL_UPLOADS, createLimiter } from '../utils/uploads';
 import { getCaretOffset, getCaretRect, placeCaret } from '../utils/caret';
 import { collectSubtree, sortedChildren, positionBetween } from '../utils/blockTree';
+import { imageUrlFromText, imageUrlFromDrop, hasWebImageTypes } from '../utils/webImage';
 import { usePageContext } from '../contexts/PageContext';
 import { useLanguage } from '../i18n/LanguageContext';
 // Shared markdown parser (same module used by the backend on import). Used to
@@ -283,6 +284,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       ...b,
       parent_id: b.parent_id ?? null,
       collapsed: b.collapsed ?? false,
+      props: b.props ?? {},
     })));
     // Flush pending updates from the previous page.
     updaterRef.current?.flush();
@@ -447,6 +449,20 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     }
   };
 
+  // Replace a block's props bag (image width / alignment / caption). The editor
+  // always sends the whole object, and the server replaces rather than merges.
+  const handlePropsChange = (id: string, props: BlockProps) => {
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, props } : b));
+    if (!id.startsWith('temp-')) {
+      // A discrete action, not typing: save it now instead of leaving it in
+      // the single debounce slot, where the next keystroke in another block
+      // would replace it.
+      updaterRef.current?.flush();
+      updaterRef.current?.debounced(id, { props });
+      updaterRef.current?.flush();
+    }
+  };
+
   const handleToggleCollapse = useCallback((id: string) => {
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, collapsed: !b.collapsed } : b));
     const target = blocks.find(b => b.id === id);
@@ -495,6 +511,21 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     const text = e.clipboardData.getData('text/plain');
     // Empty paste → let the browser handle it (no-op).
     if (!text) return;
+
+    // A lone image link pasted into an empty paragraph becomes an image block.
+    const imageUrl = imageUrlFromText(text);
+    if (imageUrl && currentContent === '') {
+      const target = blocks.find(b => b.id === blockId);
+      if (target?.type === 'paragraph' && !blocks.some(b => b.parent_id === blockId)) {
+        e.preventDefault();
+        setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, type: 'image', content: imageUrl } : b));
+        if (!blockId.startsWith('temp-')) {
+          updaterRef.current?.debounced(blockId, { type: 'image', content: imageUrl });
+        }
+        setTimeout(() => blockRefs.current[blockId]?.focus(), 0);
+        return;
+      }
+    }
     // Plain text without markers → let the browser handle it.
     if (!looksLikeMarkdown(text)) return;
 
@@ -579,6 +610,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         position: current.position + step * (i + 1),
         parent_id: parentId,
         collapsed: false,
+        props: {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -635,7 +667,9 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     type: BType = 'paragraph',
     content = '',
     parentId: string | null = null,
-    language = ''
+    language = '',
+    // Explicit position; without it the block goes right after `afterId`.
+    position?: number
   ) => {
     const newId = `temp-${crypto.randomUUID()}`;
     const newBlock: BlockType = {
@@ -648,6 +682,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       position: 0,
       parent_id: parentId,
       collapsed: false,
+      props: {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -655,7 +690,9 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     // Compute the position: if parentId is set, append to the end of that
     // parent's children; otherwise append to the root level (parent_id=null).
     let newPosition = 0;
-    if (afterId) {
+    if (position !== undefined) {
+      newPosition = position;
+    } else if (afterId) {
       const idx = blocks.findIndex(b => b.id === afterId);
       if (idx !== -1) {
         const siblingAfter = blocks[idx + 1];
@@ -663,7 +700,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         const nextPos = siblingAfter && siblingAfter.parent_id === blocks[idx].parent_id
           ? siblingAfter.position
           : prevPos + 1000;
-        newPosition = Math.floor((prevPos + nextPos) / 2);
+        newPosition = (prevPos + nextPos) / 2;
       } else {
         newPosition = (blocks.length) * 1000;
       }
@@ -918,6 +955,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
             position: copy.position,
             parent_id: parentId,
             language: copy.language,
+            props: copy.props,
           });
           let saved = res.block;
           // create() doesn't take these two.
@@ -1371,6 +1409,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         position: prevPos + step * (i + 1),
         parent_id: parentId,
         collapsed: false,
+        props: {},
         created_at: now,
         updated_at: now,
       }));
@@ -1382,6 +1421,18 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     startedIds.forEach(runUpload);
     const lastId = startedIds[startedIds.length - 1];
     setTimeout(() => blockRefs.current[lastId]?.focus(), 0);
+  };
+
+  // Insert an image block that points at a web URL, right after `anchorId`
+  // (null appends at the end of the document). Same placement as insertFiles.
+  const insertImageUrl = (url: string, anchorId: string | null) => {
+    const list = blocksRef.current;
+    const anchor = (anchorId ? list.find(b => b.id === anchorId) : undefined) ?? null;
+    const parentId = anchor ? anchor.parent_id : null;
+    const siblings = sortedChildren(list, parentId);
+    const next = anchor ? siblings[siblings.findIndex(b => b.id === anchor.id) + 1] : undefined;
+    const prevPosition = anchor ? anchor.position : siblings[siblings.length - 1]?.position;
+    void createBlock(anchor ? anchor.id : null, 'image', url, parentId, '', positionBetween(prevPosition, next?.position));
   };
 
   const handleSlashSelect = async (type: BType) => {
@@ -1511,24 +1562,22 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     if (pos === 'middle' && isDescendantOf(list, targetId, sourceId)) return null;
 
     const newParentId = pos === 'middle' ? targetId : target.parent_id;
-    const siblings = list.filter(b => b.parent_id === newParentId && b.id !== sourceId);
+    // Siblings at the destination level in position order, without the source
+    // (it is about to leave its old slot). Positions are floats, so midpoints
+    // never collide.
+    const siblings = sortedChildren(list, newParentId).filter(b => b.id !== sourceId);
+    const targetIdx = siblings.findIndex(b => b.id === targetId);
     let newPosition: number;
     if (pos === 'top') {
-      const targetIdx = siblings.findIndex(b => b.id === targetId);
-      const before = targetIdx > 0 ? siblings[targetIdx - 1] : null;
-      const after = siblings[targetIdx];
-      newPosition = before
-        ? Math.floor((before.position + (after ? after.position : before.position + 1000)) / 2) || before.position + 500
-        : (after ? after.position - 500 : 1000);
+      const before = targetIdx > 0 ? siblings[targetIdx - 1] : undefined;
+      newPosition = positionBetween(before?.position, target.position);
     } else if (pos === 'bottom') {
-      const targetIdx = siblings.findIndex(b => b.id === targetId);
-      const after = targetIdx >= 0 && targetIdx < siblings.length - 1 ? siblings[targetIdx + 1] : null;
-      newPosition = after
-        ? Math.floor((target.position + after.position) / 2) || target.position + 500
-        : target.position + 1000;
+      const after = targetIdx >= 0 && targetIdx < siblings.length - 1 ? siblings[targetIdx + 1] : undefined;
+      newPosition = positionBetween(target.position, after?.position);
     } else {
-      const kids = list.filter(b => b.parent_id === targetId);
-      newPosition = kids.length > 0 ? Math.max(...kids.map(k => k.position)) + 1000 : 1000;
+      // Middle: nest as the last child of the target.
+      const kids = sortedChildren(list, targetId).filter(b => b.id !== sourceId);
+      newPosition = positionBetween(kids.length > 0 ? kids[kids.length - 1].position : undefined, undefined);
     }
     return { newParentId, newPosition };
   }, []);
@@ -1599,6 +1648,16 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       return;
     }
 
+    // An image dragged from another page or tab arrives as a URL, not a file.
+    // Our own block drags carry no URL and are handled below.
+    if (!draggingIdRef.current) {
+      const url = imageUrlFromDrop(e.dataTransfer);
+      if (url) {
+        insertImageUrl(url, targetId);
+        return;
+      }
+    }
+
     const sourceId = draggingIdRef.current || e.dataTransfer?.getData('text/plain') || null;
     draggingIdRef.current = null;
     setDropTarget(null);
@@ -1629,7 +1688,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         updaterRef.current?.debounced(targetId, { collapsed: false });
       }
     }
-  }, [blocks, computeDrop, computeDropPosition, insertFiles, endFileDrag]);
+  }, [blocks, computeDrop, computeDropPosition, insertFiles, insertImageUrl, endFileDrag]);
 
   const handleEditorDrop = (e: React.DragEvent) => {
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
@@ -1639,6 +1698,14 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       setUploadError(null);
       // Dropped on empty space: append at the end of the document.
       insertFiles(Array.from(e.dataTransfer.files), null);
+      return;
+    }
+    if (draggingIdRef.current) return;
+    const url = imageUrlFromDrop(e.dataTransfer);
+    if (url) {
+      e.preventDefault();
+      e.stopPropagation();
+      insertImageUrl(url, null);
     }
   };
 
@@ -1679,7 +1746,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       onDragEnter={handleEditorDragEnter}
       onDragLeave={handleEditorDragLeave}
       onDragOver={(e) => {
-        if (e.dataTransfer?.types?.includes('Files') || draggingIdRef.current) {
+        if (e.dataTransfer?.types?.includes('Files') || draggingIdRef.current || hasWebImageTypes(e.dataTransfer)) {
           e.preventDefault();
         }
       }}
@@ -1727,6 +1794,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           onContentChange={handleContentChange}
           onCheckedChange={handleCheckedChange}
           onLanguageChange={handleLanguageChange}
+          onPropsChange={handlePropsChange}
           onKeyDown={handleKeyDown}
           onDelete={deleteBlock}
           onTransform={handleTransform}

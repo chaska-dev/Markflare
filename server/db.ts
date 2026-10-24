@@ -4,6 +4,7 @@
 import Database from 'better-sqlite3';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { parseBlockProps } from './shared/blockProps';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_PATH = process.env.markflare_DB_PATH || path.join(DATA_DIR, 'markflare.db');
@@ -87,6 +88,7 @@ const EXPECTED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'pages', column: 'full_width', ddl: 'full_width INTEGER NOT NULL DEFAULT 0' },
   { table: 'pages', column: 'is_project', ddl: 'is_project INTEGER NOT NULL DEFAULT 0' },
   { table: 'pages', column: 'cover', ddl: 'cover TEXT' },
+  { table: 'blocks', column: 'props', ddl: "props TEXT NOT NULL DEFAULT '{}'" },
 ];
 
 function healSchema(): void {
@@ -114,9 +116,10 @@ export function normalizePage(p: Row | undefined): Row | undefined {
   };
 }
 
-// Helper: converts `checked` (which SQLite stores as 0/1) to boolean. Used
-// by every endpoint that returns blocks.
+// Helper: converts `checked` (which SQLite stores as 0/1) to boolean and
+// parses `props` (JSON text) into an object. Used by every endpoint that
+// returns blocks.
 export function normalizeBlock(b: Row | undefined): Row | undefined {
   if (!b) return b;
-  return { ...b, checked: Boolean(b.checked), collapsed: Boolean(b.collapsed) };
+  return { ...b, checked: Boolean(b.checked), collapsed: Boolean(b.collapsed), props: parseBlockProps(b.props) };
 }

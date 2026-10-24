@@ -108,17 +108,30 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
       );
     case 'math':
       return <ReadOnlyMath latex={block.content} />;
-    case 'image':
+    case 'image': {
+      const props = block.props ?? {};
+      const width = typeof props.width === 'number' && props.width > 0 ? props.width : undefined;
+      const caption = typeof props.caption === 'string' ? props.caption : '';
       return (
-        <div className="readonly-block readonly-image">
+        <div
+          className="readonly-block readonly-image"
+          data-align={props.align === 'left' || props.align === 'right' ? props.align : 'center'}
+        >
           {block.content ? (
-            <ReadOnlyImage
-              src={block.content.startsWith('http') || block.content.startsWith('/') || block.content.startsWith('data:') ? block.content : `/api/files/${block.content}`}
-              alt={block.language || ''}
-            />
+            <figure
+              className={`block-image-figure${width ? ' block-image-figure--sized' : ''}`}
+              style={width ? { width } : undefined}
+            >
+              <ReadOnlyImage
+                src={block.content.startsWith('http') || block.content.startsWith('/') || block.content.startsWith('data:') ? block.content : `/api/files/${block.content}`}
+                alt={block.language || ''}
+              />
+              {caption && <figcaption className="block-image-caption">{caption}</figcaption>}
+            </figure>
           ) : null}
         </div>
       );
+    }
     case 'file':
       return (
         <a
@@ -183,7 +196,14 @@ function ReadOnlyImage({ src, alt }: { src: string; alt: string }) {
         onClick={() => setOpen(true)}
         aria-label={alt ? `${t('editor.imageZoom')}: ${alt}` : t('editor.imageZoom')}
       >
-        <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} />
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          referrerPolicy={/^https?:/i.test(src) ? 'no-referrer' : undefined}
+        />
       </button>
       {open && <ImageLightbox src={src} alt={alt || t('editor.imageAlt')} onClose={close} />}
     </>
