@@ -371,7 +371,8 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   const updateMention = (id: string, type: BType, content: string, isSlashCommand: boolean) => {
     const el = blockRefs.current[id];
     const caret = el ? getCaretOffset(el) : null;
-    const m = el && caret !== null && type !== 'code' && !isSlashCommand
+    // A table's content is JSON, not text the caret offset could point into.
+    const m = el && caret !== null && type !== 'code' && type !== 'table' && !isSlashCommand
       ? MENTION_RE.exec(content.slice(0, caret))
       : null;
     if (!m || !el || caret === null) {

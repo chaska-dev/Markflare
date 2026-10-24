@@ -1634,20 +1634,30 @@ body {
   width: 100%;
   margin: 8px 0;
   outline: none;
+  border-radius: 4px;
 }
-.block-table-wrapper:focus-within {
-  /* Indicar foco al editar */
+/* Focus lands here after Escape in a cell. */
+.block-table-wrapper:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .block-table-scroll {
   overflow-x: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--bg-secondary);
 }
+/* Saved column widths: the frame hugs the table instead of stretching. */
+.block-table-scroll--fixed {
+  width: fit-content;
+  max-width: 100%;
+}
+/* Borders go on the right/bottom of every cell, plus top/left on the first
+   row/column, so the grid has no collapsed borders for the scroller to clip. */
 .block-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   font-size: 14px;
+}
+.block-table--fixed {
+  table-layout: fixed;
 }
 .block-table-th,
 .block-table-td {
@@ -1659,71 +1669,155 @@ body {
   min-width: 120px;
   max-width: 320px;
 }
-.block-table-th:last-child,
-.block-table-td:last-child {
-  border-right: none;
+.block-table--fixed .block-table-th,
+.block-table--fixed .block-table-td {
+  min-width: 0;
+  max-width: none;
 }
-.block-table tbody tr:last-child .block-table-td {
-  border-bottom: none;
+.block-table tr:first-child > .block-table-th,
+.block-table tr:first-child > .block-table-td {
+  border-top: 1px solid var(--border-color);
 }
+.block-table tr > .block-table-th:first-child,
+.block-table tr > .block-table-td:first-child {
+  border-left: 1px solid var(--border-color);
+}
+/* Header row / header column (props.headerRow, props.headerColumn). */
 .block-table-th {
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   font-weight: 600;
   color: var(--text-primary);
   text-align: left;
 }
+/* Row or column whose menu is open. */
+.block-table-th.is-selected,
+.block-table-td.is-selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-primary));
+}
 .block-table-cell {
-  padding: 8px 12px;
+  padding: 6px 10px;
   outline: none;
-  min-height: 32px;
+  min-height: 1.5em;
+  line-height: 1.5;
   word-break: break-word;
   white-space: pre-wrap;
 }
 .block-table-cell:empty::before {
   content: attr(data-placeholder);
   color: var(--text-tertiary);
+  font-weight: 400;
   pointer-events: none;
 }
 .block-table-cell:focus {
-  background: rgba(35, 131, 226, 0.06);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent);
 }
-.block-table-th--actions,
-.block-table-td--actions {
+.block-table-cell a.inline-link {
+  color: var(--link-color, var(--accent));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.block-table-cell .inline-code {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+[data-theme="light"] .block-table-cell .inline-code {
+  background: rgba(0, 0, 0, 0.06);
+}
+.block-table-cell strong {
+  font-weight: 700;
+}
+.block-table-cell em {
+  font-style: italic;
+}
+
+/* Row and column grips: small bars on the edges of the first column / row,
+   shown on hover. Clicking one opens its menu. */
+.block-table-grip {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+/* Wider hit area than the bar itself. */
+.block-table-grip::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+}
+.block-table-grip--col {
+  top: 2px;
+  left: 50%;
+  width: 26px;
+  height: 5px;
+  transform: translateX(-50%);
+}
+.block-table-grip--row {
+  left: 2px;
+  top: 50%;
+  width: 5px;
+  height: 20px;
+  transform: translateY(-50%);
+}
+.block-table-th:hover > .block-table-grip--col,
+.block-table-td:hover > .block-table-grip--col,
+.block-table tr:hover .block-table-grip--row,
+.block-table-grip.is-active {
+  opacity: 1;
+}
+.block-table-grip:hover,
+.block-table-grip.is-active {
+  background: var(--accent);
+}
+
+/* Column resize handle on the right border of each first-row cell. */
+.block-table-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 3;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.block-table-resize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.block-table-resize:hover::after,
+.block-table-resize.is-active::after {
+  opacity: 1;
+}
+
+/* Trailing column with the "+" column button. */
+.block-table-actions {
   width: 32px;
   min-width: 32px;
   max-width: 32px;
-  background: var(--bg-tertiary);
   padding: 0;
-  text-align: center;
-}
-.block-table-col-remove,
-.block-table-row-remove {
-  opacity: 0;
-  width: 20px;
-  height: 20px;
   border: none;
   background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: 14px;
-  border-radius: 3px;
-  margin: 4px auto;
-  display: block;
-  transition: opacity 0.1s, background 0.1s, color 0.1s;
-}
-.block-table-th:hover .block-table-col-remove,
-.block-table-td:hover .block-table-row-remove {
-  opacity: 1;
-}
-.block-table-col-remove:hover:not(:disabled),
-.block-table-row-remove:hover:not(:disabled) {
-  background: var(--danger);
-  color: white;
-}
-.block-table-col-remove:disabled,
-.block-table-row-remove:disabled {
-  cursor: not-allowed;
-  opacity: 0;
+  text-align: center;
+  vertical-align: top;
 }
 .block-table-add-col,
 .block-table-add-row {
@@ -1734,7 +1828,8 @@ body {
   font-size: 12px;
   padding: 4px 6px;
   border-radius: 3px;
-  transition: background 0.1s, color 0.1s;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.1s, color 0.1s;
 }
 .block-table-add-col {
   width: 24px;
@@ -1743,20 +1838,47 @@ body {
   margin: 4px auto;
 }
 .block-table-add-row {
+  display: block;
   width: 100%;
-  padding: 6px 12px;
+  padding: 6px 10px;
   text-align: left;
+}
+.block-table-wrapper:hover .block-table-add-col,
+.block-table-wrapper:hover .block-table-add-row,
+.block-table-wrapper:focus-within .block-table-add-col,
+.block-table-wrapper:focus-within .block-table-add-row {
+  opacity: 1;
 }
 .block-table-add-col:hover,
 .block-table-add-row:hover {
   background: var(--bg-hover);
   color: var(--accent);
 }
-.block-table-td--add {
-  background: transparent !important;
+.block-table-add {
+  background: transparent;
   padding: 0;
-  border-bottom: none;
+  border: none;
 }
+
+/* No hover on touch screens: keep the controls reachable. */
+@media (hover: none) {
+  .block-table-grip,
+  .block-table-add-col,
+  .block-table-add-row {
+    opacity: 1;
+  }
+}
+
+/* Shared view: same grid, no controls. */
+.readonly-table-scroll {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.readonly-table-scroll.block-table-scroll--fixed {
+  width: fit-content;
+  max-width: 100%;
+}
+
 /* ============================================================
    CONFIRM DIALOG 
    ============================================================ */
@@ -2454,15 +2576,6 @@ body {
 .readonly-subpage-arrow {
   flex-shrink: 0;
   color: var(--text-tertiary, #6a6a72);
-}
-.readonly-table-placeholder {
-  padding: 12px;
-  background: var(--bg-input, #0a0a0d);
-  border: 1px dashed var(--border-color, #2a2a32);
-  border-radius: 6px;
-  color: var(--text-tertiary, #6a6a72);
-  font-size: 12px;
-  text-align: center;
 }
 
 /* Mobile: shared view se apila verticalmente */

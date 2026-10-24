@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Block as BlockType, BlockType as BType, BlockProps, UploadState } from '../types';
 import { usePageContext } from '../contexts/PageContext';
@@ -21,6 +21,8 @@ import {
   CopyIcon,
   CheckIcon,
   MathIcon,
+  PlusIcon,
+  XIcon,
   ImageIcon,
   AlignLeftIcon,
   AlignCenterIcon,
@@ -35,10 +37,31 @@ import { formatFileSize } from '../utils/uploads';
 import { inlineMarkdownToHtml, plainTextToSafeHtml, InlineOptions } from './inlineMarkdown';
 import { useKatexHtml } from '../utils/katexLoader';
 import { useLanguage } from '../i18n/LanguageContext';
+import { placeCaret } from '../utils/caret';
+import {
+  TableData,
+  TableGrid,
+  TABLE_MIN_COL_WIDTH,
+  TABLE_MAX_COL_WIDTH,
+  TABLE_DEFAULT_COL_WIDTH,
+  parseTableData,
+  tableOptions,
+  toGrid,
+  fromGrid,
+  insertAt,
+  parseTsv,
+} from '../utils/table';
 
 // Smallest width (px) the resize handles allow.
 const IMAGE_MIN_WIDTH = 80;
 const CAPTION_MAX_LENGTH = 500;
+
+// Merge a change into a props bag; undefined removes the key.
+function mergeProps(props: BlockProps, patch: Partial<BlockProps>): BlockProps {
+  const next: BlockProps = { ...props, ...patch };
+  for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
+  return next;
+}
 
 // Image block, Notion-style. Without props.width it renders at the image's
 // natural width capped to the column. The two side handles resize it (width in
@@ -101,11 +124,8 @@ function ImageBlock({
     if (captionOpen) captionRef.current?.focus();
   }, [captionOpen]);
 
-  // Merge a change into the props bag; undefined removes the key.
   const updateProps = (patch: Partial<BlockProps>) => {
-    const next: BlockProps = { ...props, ...patch };
-    for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
-    onPropsChange?.(block.id, next);
+    onPropsChange?.(block.id, mergeProps(props, patch));
   };
 
   const startResize = (e: React.PointerEvent<HTMLDivElement>, side: 'left' | 'right') => {
@@ -395,7 +415,8 @@ interface Props {
   onKeyDown: (id: string, e: React.KeyboardEvent) => void;
   onCheckedChange?: (id: string, checked: boolean) => void;
   onLanguageChange?: (id: string, language: string) => void;
-  // Replace the block's props bag (image width / alignment / caption).
+  // Replace the block's props bag (image width / alignment / caption, table
+  // header options / column widths).
   onPropsChange?: (id: string, props: BlockProps) => void;
   // Optional paste handler. If provided, the contenteditable intercepts paste
   // and forwards (blockId + current DOM content) to the editor, which decides
@@ -761,7 +782,9 @@ export function Block({
         return (
           <TableBlock
             block={block}
+            inlineOpts={inlineOpts}
             onContentChange={onContentChange}
+            onPropsChange={onPropsChange}
             onKeyDown={onKeyDown}
             blockRef={blockRef}
           />
@@ -927,165 +950,585 @@ export function Block({
   );
 }
 
-// Table block: editable cells, add/remove row/col, persistence via JSON in content.
+// Table block, Notion-style. The data is JSON in content ({columns, rows}, the
+// columns being the header row) and the display options are in props:
+// headerRow (default on), headerColumn and colWidths. Cells are plain text
+// while focused and rendered inline markdown otherwise; a cell is saved when it
+// blurs. Rows and columns are edited from the grips on their edges (a menu),
+// the "+" buttons and the keyboard (see handleCellKeyDown).
 
-interface TableData {
-  columns: string[];
-  rows: string[][];
+// Width (px) of the trailing column that holds the "+" button; keep in sync
+// with .block-table-actions in index.css.
+const TABLE_ACTIONS_WIDTH = 32;
+
+const emptyRow = (n: number): string[] => Array<string>(n).fill('');
+
+// Text of a cell's DOM. Line breaks made by the browser (<br>, or a block
+// wrapper) become "\n". Trailing breaks are dropped: browsers keep a <br> after
+// a final line break only as a placeholder to show the empty line.
+function readCellText(el: HTMLElement): string {
+  let out = '';
+  const walk = (node: Node) => {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        out += child.nodeValue ?? '';
+      } else if (child.nodeName === 'BR') {
+        out += '\n';
+      } else if (child instanceof HTMLElement) {
+        if (out !== '' && !out.endsWith('\n') && (child.nodeName === 'DIV' || child.nodeName === 'P')) out += '\n';
+        walk(child);
+      }
+    });
+  };
+  walk(el);
+  return out.replace(/\n+$/, '');
 }
 
-// `columnLabel(n)` names the default columns, so the caller can localise them.
-function parseTableData(raw: string, columnLabel: (n: number) => string): TableData {
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) {
-      return parsed as TableData;
-    }
-  } catch {
-    // fallthrough to default
+// Whether the caret is on the first ('up') or last ('down') visual line of the
+// cell, i.e. whether the arrow key has nowhere left to go inside it.
+function caretOnEdgeLine(el: HTMLElement, edge: 'up' | 'down'): boolean {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !el.contains(sel.anchorNode)) return false;
+  const range = sel.getRangeAt(0);
+  const rect = range.getClientRects()[0];
+  if (!rect || (!rect.width && !rect.height)) {
+    // A collapsed range can report no rect (empty cell, start of a line): look
+    // for an explicit line break on the way to the edge instead.
+    const probe = document.createRange();
+    probe.selectNodeContents(el);
+    if (edge === 'up') probe.setEnd(range.endContainer, range.endOffset);
+    else probe.setStart(range.startContainer, range.startOffset);
+    const rest = probe.cloneContents();
+    return !(rest.textContent ?? '').includes('\n') && !rest.querySelector('br');
   }
-  return { columns: [columnLabel(1), columnLabel(2)], rows: [['', ''], ['', '']] };
+  const style = window.getComputedStyle(el);
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+  const box = el.getBoundingClientRect();
+  return edge === 'up'
+    ? rect.top < box.top + parseFloat(style.paddingTop) + lineHeight
+    : rect.bottom > box.bottom - parseFloat(style.paddingBottom) - lineHeight;
+}
+
+interface TableCellProps {
+  row: number;
+  col: number;
+  value: string;
+  placeholder: string;
+  inlineOpts: InlineOptions;
+  onCommit: (row: number, col: number, text: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, row: number, col: number) => void;
+  onPaste: (e: React.ClipboardEvent<HTMLDivElement>, row: number, col: number) => void;
+}
+
+// One editable cell. Like a text block it shows raw text while focused (so the
+// caret and typing behave) and inline markdown otherwise, but it writes to the
+// DOM itself and only reports the text on blur, so typing never re-renders it.
+function TableCell({ row, col, value, placeholder, inlineOpts, onCommit, onKeyDown, onPaste }: TableCellProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
+  const [focused, setFocused] = useState(false);
+  // The value last put into the DOM (or committed from it). While focused the
+  // DOM holds what the user typed, which only a different value may replace.
+  const syncedRef = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (focused) {
+      if (syncedRef.current !== value && readCellText(el) !== value) el.textContent = value;
+    } else {
+      const html = inlineMarkdownToHtml(value, inlineOpts);
+      if (el.innerHTML !== html) el.innerHTML = html;
+    }
+    syncedRef.current = value;
+  }, [value, focused, inlineOpts]);
+
+  // Ctrl/Cmd+click opens a link; a plain click edits the cell.
+  const isLinkOpen = (e: React.MouseEvent) =>
+    (e.ctrlKey || e.metaKey) && Boolean((e.target as HTMLElement).closest('a.inline-link'));
+
+  return (
+    <div
+      ref={ref}
+      className="block-table-cell"
+      contentEditable
+      suppressContentEditableWarning
+      data-row={row}
+      data-col={col}
+      data-placeholder={placeholder}
+      onFocus={(e) => {
+        // Rendered markdown -> raw text. Plain cells already match, which keeps
+        // the caret where the click put it.
+        if (readCellText(e.currentTarget) !== value) e.currentTarget.textContent = value;
+        syncedRef.current = value;
+        setFocused(true);
+      }}
+      onBlur={(e) => {
+        onCommit(row, col, readCellText(e.currentTarget));
+        setFocused(false);
+      }}
+      onInput={(e) => {
+        // Emptied cells keep a lone <br> that would hide the placeholder.
+        const el = e.currentTarget;
+        if (el.childNodes.length === 1 && el.firstChild?.nodeName === 'BR') el.replaceChildren();
+      }}
+      onKeyDown={(e) => onKeyDown(e, row, col)}
+      onPaste={(e) => onPaste(e, row, col)}
+      onMouseDown={(e) => {
+        if (isLinkOpen(e)) e.preventDefault();
+      }}
+      onClick={(e) => {
+        if (!isLinkOpen(e)) return;
+        const link = (e.target as HTMLElement).closest('a.inline-link') as HTMLAnchorElement;
+        e.preventDefault();
+        e.stopPropagation();
+        const pageId = link.getAttribute('data-page-id');
+        if (pageId) navigate(`/page/${pageId}`);
+        else window.open(link.getAttribute('href') || '', '_blank', 'noopener,noreferrer');
+      }}
+    />
+  );
 }
 
 interface TableBlockProps {
   block: BlockType;
+  inlineOpts: InlineOptions;
   onContentChange: (id: string, content: string) => void;
+  onPropsChange?: (id: string, props: BlockProps) => void;
   onKeyDown: (id: string, e: React.KeyboardEvent) => void;
   blockRef: (el: HTMLElement | null) => void;
 }
 
-function TableBlock({ block, onContentChange, onKeyDown, blockRef }: TableBlockProps) {
+// Open menu for a row or a column; x/y are viewport coordinates.
+interface TableMenu {
+  kind: 'row' | 'col';
+  index: number;
+  x: number;
+  y: number;
+}
+
+function TableBlock({ block, inlineOpts, onContentChange, onPropsChange, onKeyDown, blockRef }: TableBlockProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
   const { t } = useLanguage();
   const columnLabel = (n: number) => t('editor.tableDefaultColumn', { n });
-  const data = parseTableData(block.content, columnLabel);
+  const data = useMemo(() => parseTableData(block.content, columnLabel), [block.content, t]);
+  const props: BlockProps = block.props ?? {};
+  const nCols = data.columns.length;
+  const { headerRow, headerColumn, colWidths } = tableOptions(props, nCols);
+
+  // Latest data/props. Structure changes and cell commits can follow each
+  // other before React re-renders (Tab commits a cell and adds a row in one
+  // go), so edits build on these instead of on the render's snapshot.
+  const dataRef = useRef<TableData>(data);
+  dataRef.current = data;
+  const propsRef = useRef<BlockProps>(props);
+  propsRef.current = props;
+
+  const [menu, setMenu] = useState<TableMenu | null>(null);
+  // Column widths while a handle is dragged. Local only: saved once, on
+  // pointerup, so a drag doesn't produce a request per pixel.
+  const [liveWidths, setLiveWidths] = useState<number[] | null>(null);
+  const resizeRef = useRef<{ index: number; startX: number; startWidth: number; widths: number[]; moved: boolean } | null>(null);
+  // Cell to focus once the next render has created it (a row added by keyboard).
+  const pendingFocus = useRef<{ row: number; col: number } | null>(null);
 
   const setWrapperRef = (el: HTMLDivElement | null) => {
     wrapperRef.current = el;
     blockRef(el);
   };
 
-  const persist = (next: TableData) => {
+  const getGrid = (): TableGrid => toGrid(dataRef.current);
+
+  const setGrid = (grid: TableGrid) => {
+    const next = fromGrid(grid);
+    dataRef.current = next;
     onContentChange(block.id, JSON.stringify(next));
   };
 
-  const updateCell = (rowIdx: number, colIdx: number, value: string) => {
-    const next: TableData = {
-      columns: [...data.columns],
-      rows: data.rows.map((r, i) => i === rowIdx ? r.map((c, j) => j === colIdx ? value : c) : r),
+  const updateProps = (patch: Partial<BlockProps>) => {
+    const next = mergeProps(propsRef.current, patch);
+    propsRef.current = next;
+    onPropsChange?.(block.id, next);
+  };
+
+  const withCell = (grid: TableGrid, row: number, col: number, text: string): TableGrid =>
+    grid.map((r, i) => (i === row ? r.map((v, j) => (j === col ? text : v)) : r));
+
+  const commitCell = (row: number, col: number, text: string) => {
+    const grid = getGrid();
+    if (grid[row]?.[col] === undefined || grid[row][col] === text) return;
+    setGrid(withCell(grid, row, col, text));
+  };
+
+  // Typed text is saved when its cell blurs, which doesn't happen when the page
+  // is closed, hidden or navigated away from under a focused cell.
+  const commitActiveRef = useRef<() => void>(() => {});
+  commitActiveRef.current = () => {
+    const el = document.activeElement;
+    if (!(el instanceof HTMLElement) || !wrapperRef.current?.contains(el) || el.dataset.row === undefined) return;
+    commitCell(Number(el.dataset.row), Number(el.dataset.col), readCellText(el));
+  };
+  useLayoutEffect(() => {
+    const flush = () => commitActiveRef.current();
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush();
     };
-    persist(next);
-  };
-
-  const updateColumnHeader = (colIdx: number, value: string) => {
-    const next: TableData = {
-      columns: data.columns.map((c, i) => i === colIdx ? value : c),
-      rows: data.rows,
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+      // Unmounting while a cell has focus (browser back, ...): no blur comes.
+      flush();
     };
-    persist(next);
+  }, []);
+
+  const focusCell = (row: number, col: number) => {
+    const el = wrapperRef.current?.querySelector<HTMLElement>(`[data-row="${row}"][data-col="${col}"]`);
+    if (!el) return;
+    el.focus();
+    placeCaret(el, Infinity);
   };
 
-  const addRow = () => {
-    const newRow = Array(data.columns.length).fill('');
-    persist({ columns: data.columns, rows: [...data.rows, newRow] });
+  useEffect(() => {
+    const p = pendingFocus.current;
+    if (!p) return;
+    pendingFocus.current = null;
+    focusCell(p.row, p.col);
+  });
+
+  // Add a row at the end and focus `col` of it. `grid` already holds the text
+  // of the cell being left.
+  const appendRowAndFocus = (grid: TableGrid, col: number) => {
+    setGrid([...grid, emptyRow(grid[0].length)]);
+    pendingFocus.current = { row: grid.length, col };
   };
 
-  const removeRow = (rowIdx: number) => {
-    if (data.rows.length <= 1) return;
-    persist({ columns: data.columns, rows: data.rows.filter((_, i) => i !== rowIdx) });
+  // Structure changes.
+
+  const insertRow = (row: number, below: boolean) =>
+    setGrid(insertAt(getGrid(), below ? row + 1 : row, emptyRow(nCols)));
+
+  const duplicateRow = (row: number) => {
+    const grid = getGrid();
+    setGrid(insertAt(grid, row + 1, [...grid[row]]));
   };
 
-  const addColumn = () => {
-    persist({
-      columns: [...data.columns, columnLabel(data.columns.length + 1)],
-      rows: data.rows.map(r => [...r, '']),
-    });
+  const clearRow = (row: number) => {
+    setGrid(getGrid().map((r, i) => (i === row ? r.map(() => '') : r)));
   };
 
-  const removeColumn = (colIdx: number) => {
-    if (data.columns.length <= 1) return;
-    persist({
-      columns: data.columns.filter((_, i) => i !== colIdx),
-      rows: data.rows.map(r => r.filter((_, i) => i !== colIdx)),
-    });
+  const deleteRow = (row: number) => {
+    const grid = getGrid();
+    if (grid.length <= 1) return;
+    setGrid(grid.filter((_, i) => i !== row));
   };
+
+  // Column changes keep the saved widths (if any) in step with the cells.
+  const editColumns = (editRow: (row: string[], rowIndex: number) => string[], editWidths?: (widths: number[]) => number[]) => {
+    const grid = getGrid();
+    const widths = tableOptions(propsRef.current, grid[0].length).colWidths;
+    setGrid(grid.map(editRow));
+    if (widths && editWidths) updateProps({ colWidths: editWidths(widths) });
+  };
+
+  const insertColumn = (col: number, right: boolean) => {
+    const at = right ? col + 1 : col;
+    editColumns(r => insertAt(r, at, ''), w => insertAt(w, at, TABLE_DEFAULT_COL_WIDTH));
+  };
+
+  const duplicateColumn = (col: number) =>
+    editColumns(r => insertAt(r, col + 1, r[col]), w => insertAt(w, col + 1, w[col]));
+
+  const clearColumn = (col: number) => editColumns(r => r.map((v, i) => (i === col ? '' : v)));
+
+  const deleteColumn = (col: number) => {
+    if (nCols <= 1) return;
+    editColumns(r => r.filter((_, i) => i !== col), w => w.filter((_, i) => i !== col));
+  };
+
+  const addRow = () => setGrid([...getGrid(), emptyRow(nCols)]);
+
+  const addColumn = () =>
+    editColumns(
+      (r, i) => [...r, i === 0 && headerRow ? columnLabel(nCols + 1) : ''],
+      w => [...w, TABLE_DEFAULT_COL_WIDTH],
+    );
+
+  const toggleHeaderRow = () => updateProps({ headerRow: headerRow ? false : undefined });
+  const toggleHeaderColumn = () => updateProps({ headerColumn: headerColumn ? undefined : true });
+
+  // Keyboard.
+
+  const handleCellKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, row: number, col: number) => {
+    // Keys pressed while an input method composes text belong to it.
+    if (e.nativeEvent.isComposing) return;
+    const el = e.currentTarget;
+    const grid = getGrid();
+    const lastRow = grid.length - 1;
+    const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+    const handled = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    if (e.key === 'Escape') {
+      // Back to the block itself, so the editor's block navigation works again.
+      handled();
+      el.blur();
+      wrapperRef.current?.focus();
+      return;
+    }
+
+    if (e.key === 'Tab' && plain) {
+      handled();
+      // Cells in reading order, wrapping across rows.
+      const next = row * nCols + col + (e.shiftKey ? -1 : 1);
+      if (next < 0) return;
+      if (next >= grid.length * nCols) appendRowAndFocus(withCell(grid, row, col, readCellText(el)), 0);
+      else focusCell(Math.floor(next / nCols), next % nCols);
+      return;
+    }
+
+    if (e.key === 'Enter' && plain) {
+      handled();
+      if (e.shiftKey) document.execCommand('insertLineBreak');
+      else if (row < lastRow) focusCell(row + 1, col);
+      else appendRowAndFocus(withCell(grid, row, col, readCellText(el)), col);
+      return;
+    }
+
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && plain && !e.shiftKey) {
+      const up = e.key === 'ArrowUp';
+      const target = up ? row - 1 : row + 1;
+      if (target >= 0 && target <= lastRow && caretOnEdgeLine(el, up ? 'up' : 'down')) {
+        handled();
+        focusCell(target, col);
+      }
+    }
+  };
+
+  // Plain text only. Text with tabs or newlines (copied from a spreadsheet)
+  // fills the grid from this cell on, adding the rows and columns it needs.
+  const handleCellPaste = (e: React.ClipboardEvent<HTMLDivElement>, row: number, col: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+    if (!/[\t\r\n]/.test(text)) {
+      document.execCommand('insertText', false, text);
+      return;
+    }
+    const pasted = parseTsv(text);
+    if (pasted.length === 0) return;
+    if (pasted.length === 1 && pasted[0].length === 1) {
+      document.execCommand('insertText', false, pasted[0][0]);
+      return;
+    }
+
+    const grid = getGrid().map(r => [...r]);
+    const oldCols = grid[0].length;
+    const cols = Math.max(oldCols, col + Math.max(...pasted.map(r => r.length)));
+    for (const r of grid) while (r.length < cols) r.push('');
+    while (grid.length < row + pasted.length) grid.push(emptyRow(cols));
+    pasted.forEach((line, i) => line.forEach((v, j) => {
+      grid[row + i][col + j] = v.replace(/\n+$/, '');
+    }));
+
+    const widths = tableOptions(propsRef.current, oldCols).colWidths;
+    setGrid(grid);
+    if (widths && cols > oldCols) {
+      updateProps({ colWidths: [...widths, ...Array<number>(cols - oldCols).fill(TABLE_DEFAULT_COL_WIDTH)] });
+    }
+    // The focused cell now holds new text; put the caret after it.
+    pendingFocus.current = { row, col };
+  };
+
+  // Column resize, mirroring the image handles: pointer capture, the width is
+  // only local while dragging and saved on pointerup.
+
+  const startResize = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const headerCells = tableRef.current?.rows[0]?.cells;
+    if (!headerCells) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    // Measure every column: the first drag turns an auto-sized table into a
+    // fixed one, and the other columns must keep the width they have now.
+    const widths = Array.from({ length: nCols }, (_, i) => Math.round(headerCells[i].getBoundingClientRect().width));
+    resizeRef.current = { index, startX: e.clientX, startWidth: widths[index], widths, moved: false };
+  };
+
+  const moveResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = resizeRef.current;
+    if (!r) return;
+    const width = Math.round(Math.min(TABLE_MAX_COL_WIDTH, Math.max(TABLE_MIN_COL_WIDTH, r.startWidth + e.clientX - r.startX)));
+    r.widths = r.widths.map((w, i) => (i === r.index ? width : w));
+    r.moved = true;
+    setLiveWidths(r.widths);
+  };
+
+  const endResize = (e: React.PointerEvent<HTMLDivElement>, commit: boolean) => {
+    const r = resizeRef.current;
+    if (!r) return;
+    resizeRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    setLiveWidths(null);
+    if (commit && r.moved) updateProps({ colWidths: r.widths });
+  };
+
+  // Menus.
+
+  const openMenu = (e: React.MouseEvent<HTMLButtonElement>, kind: 'row' | 'col', index: number) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenu(kind === 'row'
+      ? { kind, index, x: rect.right + 4, y: rect.top }
+      : { kind, index, x: rect.left, y: rect.bottom + 4 });
+  };
+
+  const checkIcon = (on: boolean) =>
+    on ? <CheckIcon size={14} /> : <span style={{ display: 'inline-block', width: 14, height: 14 }} />;
+
+  const menuItems = ({ kind, index }: TableMenu): ContextMenuItem[] => [
+    ...(kind === 'row'
+      ? [
+          { label: t('editor.tableInsertRowAbove'), icon: <PlusIcon size={14} />, onClick: () => insertRow(index, false) },
+          { label: t('editor.tableInsertRowBelow'), icon: <PlusIcon size={14} />, onClick: () => insertRow(index, true) },
+          { label: t('editor.tableDuplicateRow'), icon: <CopyIcon size={14} />, onClick: () => duplicateRow(index) },
+          { label: t('editor.tableClearRow'), icon: <XIcon size={14} />, onClick: () => clearRow(index) },
+          {
+            label: t('editor.tableDeleteRow'),
+            icon: <TrashIcon size={14} />,
+            danger: true,
+            disabled: data.rows.length === 0,
+            onClick: () => deleteRow(index),
+          },
+        ]
+      : [
+          { label: t('editor.tableInsertColumnLeft'), icon: <PlusIcon size={14} />, onClick: () => insertColumn(index, false) },
+          { label: t('editor.tableInsertColumnRight'), icon: <PlusIcon size={14} />, onClick: () => insertColumn(index, true) },
+          { label: t('editor.tableDuplicateColumn'), icon: <CopyIcon size={14} />, onClick: () => duplicateColumn(index) },
+          { label: t('editor.tableClearColumn'), icon: <XIcon size={14} />, onClick: () => clearColumn(index) },
+          {
+            label: t('editor.tableDeleteColumn'),
+            icon: <TrashIcon size={14} />,
+            danger: true,
+            disabled: nCols <= 1,
+            onClick: () => deleteColumn(index),
+          },
+        ]),
+    { divider: true },
+    { label: t('editor.tableHeaderRow'), icon: checkIcon(headerRow), onClick: toggleHeaderRow },
+    { label: t('editor.tableHeaderColumn'), icon: checkIcon(headerColumn), onClick: toggleHeaderColumn },
+  ];
+
+  const grid = [data.columns, ...data.rows];
+  const widths = liveWidths ?? colWidths;
 
   return (
     <div
       className="block-table-wrapper"
       ref={setWrapperRef}
       tabIndex={0}
-      onKeyDown={(e) => onKeyDown(block.id, e)}
+      // Only keys pressed on the block itself are the editor's (block
+      // navigation, Enter for a new block); cells and buttons handle their own.
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget) onKeyDown(block.id, e);
+      }}
     >
-      <div className="block-table-scroll">
-        <table className="block-table">
-          <thead>
-            <tr>
-              {data.columns.map((col, ci) => (
-                <th key={ci} className="block-table-th">
-                  <div
-                    contentEditable
-                    suppressContentEditableWarning
-                    className="block-table-cell"
-                    data-placeholder={t('editor.tableHeaderPlaceholder')}
-                    onBlur={(e) => updateColumnHeader(ci, e.currentTarget.textContent || '')}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
-                    {col}
-                  </div>
-                  <button
-                    type="button"
-                    className="block-table-col-remove"
-                    onClick={() => removeColumn(ci)}
-                    disabled={data.columns.length <= 1}
-                    title={t('editor.removeColumn')}
-                    aria-label={t('editor.removeColumn')}
-                    contentEditable={false}
-                  >×</button>
-                </th>
-              ))}
-              <th className="block-table-th block-table-th--actions" contentEditable={false}>
-                <button
-                  type="button"
-                  className="block-table-add-col"
-                  onClick={addColumn}
-                  title={t('editor.addColumn')}
-                  aria-label={t('editor.addColumn')}
-                >＋</button>
-              </th>
-            </tr>
-          </thead>
+      <div className={`block-table-scroll${widths ? ' block-table-scroll--fixed' : ''}`}>
+        <table
+          ref={tableRef}
+          className={`block-table${widths ? ' block-table--fixed' : ''}`}
+          style={widths ? { width: widths.reduce((sum, w) => sum + w, 0) + TABLE_ACTIONS_WIDTH } : undefined}
+        >
+          {widths && (
+            <colgroup>
+              {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
+              <col style={{ width: TABLE_ACTIONS_WIDTH }} />
+            </colgroup>
+          )}
           <tbody>
-            {data.rows.map((row, ri) => (
+            {grid.map((row, ri) => (
               <tr key={ri}>
-                {row.map((cell, ci) => (
-                  <td key={ci} className="block-table-td">
-                    <div
-                      contentEditable
-                      suppressContentEditableWarning
-                      className="block-table-cell"
-                      data-placeholder={t('editor.tableCellPlaceholder')}
-                      onBlur={(e) => updateCell(ri, ci, e.currentTarget.textContent || '')}
-                      onKeyDown={(e) => e.stopPropagation()}
+                {row.map((cell, ci) => {
+                  const isHeader = (headerRow && ri === 0) || (headerColumn && ci === 0);
+                  const Cell = isHeader ? 'th' : 'td';
+                  const selected = menu !== null && (menu.kind === 'row' ? menu.index === ri : menu.index === ci);
+                  return (
+                    <Cell
+                      key={ci}
+                      className={`${isHeader ? 'block-table-th' : 'block-table-td'}${selected ? ' is-selected' : ''}`}
                     >
-                      {cell}
-                    </div>
-                  </td>
-                ))}
-                <td className="block-table-td block-table-td--actions" contentEditable={false}>
-                  <button
-                    type="button"
-                    className="block-table-row-remove"
-                    onClick={() => removeRow(ri)}
-                    disabled={data.rows.length <= 1}
-                    title={t('editor.removeRow')}
-                    aria-label={t('editor.removeRow')}
-                  >×</button>
+                      <TableCell
+                        row={ri}
+                        col={ci}
+                        value={cell}
+                        placeholder={t(headerRow && ri === 0 ? 'editor.tableHeaderPlaceholder' : 'editor.tableCellPlaceholder')}
+                        inlineOpts={inlineOpts}
+                        onCommit={commitCell}
+                        onKeyDown={handleCellKeyDown}
+                        onPaste={handleCellPaste}
+                      />
+                      {ci === 0 && (
+                        <button
+                          type="button"
+                          className={`block-table-grip block-table-grip--row${menu?.kind === 'row' && menu.index === ri ? ' is-active' : ''}`}
+                          tabIndex={-1}
+                          title={t('editor.tableRowOptions')}
+                          aria-label={t('editor.tableRowOptions')}
+                          aria-haspopup="menu"
+                          onClick={(e) => openMenu(e, 'row', ri)}
+                        />
+                      )}
+                      {ri === 0 && (
+                        <>
+                          <button
+                            type="button"
+                            className={`block-table-grip block-table-grip--col${menu?.kind === 'col' && menu.index === ci ? ' is-active' : ''}`}
+                            tabIndex={-1}
+                            title={t('editor.tableColumnOptions')}
+                            aria-label={t('editor.tableColumnOptions')}
+                            aria-haspopup="menu"
+                            onClick={(e) => openMenu(e, 'col', ci)}
+                          />
+                          <div
+                            className={`block-table-resize${liveWidths && resizeRef.current?.index === ci ? ' is-active' : ''}`}
+                            title={t('editor.tableResizeColumn')}
+                            draggable={false}
+                            onPointerDown={(e) => startResize(e, ci)}
+                            onPointerMove={moveResize}
+                            onPointerUp={(e) => endResize(e, true)}
+                            onPointerCancel={(e) => endResize(e, false)}
+                            onClick={(e) => e.stopPropagation()}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              if (colWidths) updateProps({ colWidths: undefined });
+                            }}
+                          />
+                        </>
+                      )}
+                    </Cell>
+                  );
+                })}
+                <td className="block-table-actions">
+                  {ri === 0 && (
+                    <button
+                      type="button"
+                      className="block-table-add-col"
+                      onClick={addColumn}
+                      title={t('editor.addColumn')}
+                      aria-label={t('editor.addColumn')}
+                    >＋</button>
+                  )}
                 </td>
               </tr>
             ))}
-            <tr contentEditable={false}>
-              <td colSpan={data.columns.length + 1} className="block-table-td block-table-td--add">
+            <tr>
+              <td colSpan={nCols + 1} className="block-table-add">
                 <button
                   type="button"
                   className="block-table-add-row"
@@ -1097,6 +1540,14 @@ function TableBlock({ block, onContentChange, onKeyDown, blockRef }: TableBlockP
           </tbody>
         </table>
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems(menu)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

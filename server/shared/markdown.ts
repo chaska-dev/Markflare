@@ -39,7 +39,8 @@ function splitTableRow(line: string): string[] {
     .replace(/^\|/, '')
     .replace(/\|$/, '')
     .split(/(?<!\\)\|/)
-    .map(c => stripEmphasis(c.trim().replace(/\\\|/g, '|')));
+    // Cells render inline markdown (bold, links, code), so it is kept as is.
+    .map(c => c.trim().replace(/\\\|/g, '|'));
 }
 
 function parseTable(lines: string[]): { columns: string[]; rows: string[][] } {

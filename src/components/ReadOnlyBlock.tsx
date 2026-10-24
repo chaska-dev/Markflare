@@ -11,6 +11,7 @@ import { ImageLightbox } from './ImageLightbox';
 import { useLanguage } from '../i18n/LanguageContext';
 import { inlineMarkdownToHtml, plainTextToSafeHtml } from './inlineMarkdown';
 import { useKatexHtml } from '../utils/katexLoader';
+import { parseTableData, tableOptions, toGrid } from '../utils/table';
 
 interface Props {
   block: Block;
@@ -158,16 +159,50 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
         </a>
       );
     case 'table':
-      // Tables are a composite block (TableBlock) with internal state. In the
-      // simplified public view we show a placeholder; a future build-out could
-      // request the sub-render detail from the backend.
-      return (
-        <div className="readonly-block readonly-table-placeholder">[Table]</div>
-      );
+      return <ReadOnlyTable block={block} rich={rich} />;
     case 'paragraph':
     default:
       return <div className="readonly-block readonly-paragraph" {...rich(block.content)} />;
   }
+}
+
+// Same grid as the editor's table (header row/column, saved column widths),
+// without the controls. Cells render inline markdown like text blocks do.
+function ReadOnlyTable({ block, rich }: { block: Block; rich: (text: string) => React.HTMLAttributes<HTMLDivElement> }) {
+  const { t } = useLanguage();
+  const data = parseTableData(block.content, (n) => t('editor.tableDefaultColumn', { n }));
+  const { headerRow, headerColumn, colWidths } = tableOptions(block.props, data.columns.length);
+  const grid = toGrid(data);
+
+  return (
+    <div className={`readonly-block readonly-table-scroll${colWidths ? ' block-table-scroll--fixed' : ''}`}>
+      <table
+        className={`block-table${colWidths ? ' block-table--fixed' : ''}`}
+        style={colWidths ? { width: colWidths.reduce((sum, w) => sum + w, 0) } : undefined}
+      >
+        {colWidths && (
+          <colgroup>
+            {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
+        )}
+        <tbody>
+          {grid.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => {
+                const isHeader = (headerRow && ri === 0) || (headerColumn && ci === 0);
+                const Cell = isHeader ? 'th' : 'td';
+                return (
+                  <Cell key={ci} className={isHeader ? 'block-table-th' : 'block-table-td'}>
+                    <div className="block-table-cell" {...rich(cell)} />
+                  </Cell>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // KaTeX is loaded on demand (see katexLoader); until then a short placeholder

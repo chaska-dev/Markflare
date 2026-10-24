@@ -50,12 +50,18 @@ export type BlockType =
   | 'toggle'
   | 'math';
 
-// Free-form JSON bag stored in blocks.props. Images use width/align/caption;
-// later phases will add more keys (color, ...) without touching the schema.
+// Free-form JSON bag stored in blocks.props. Images use width/align/caption,
+// tables headerRow/headerColumn/colWidths; later phases will add more keys
+// (color, ...) without touching the schema.
 export interface BlockProps {
   width?: number;
   align?: 'left' | 'center' | 'right';
   caption?: string;
+  // Table: first row / first column styled as a header (headerRow defaults to
+  // true when missing) and the width in px of each column (missing = auto).
+  headerRow?: boolean;
+  headerColumn?: boolean;
+  colWidths?: number[];
   [key: string]: unknown;
 }
 
