@@ -582,6 +582,47 @@ export function MathIcon({ size = 16, ...rest }: IconProps) {
   );
 }
 
+export function BookmarkIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ y: -1.5 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+    </motion.svg>
+  );
+}
+
+export function EmbedIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ scale: 1.08 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <polygon points="10 9 15 12 10 15 10 9" />
+    </motion.svg>
+  );
+}
+
+export function RefreshIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ rotate: 90 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+    </motion.svg>
+  );
+}
+
 export function SearchIcon({ size = 16, className = '', ...rest }: IconProps) {
   return (
     <motion.svg

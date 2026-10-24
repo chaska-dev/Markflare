@@ -196,6 +196,14 @@ export const en = {
   'editor.imageResize': 'Drag to resize, double-click to reset',
   'editor.imageZoom': 'View full size',
   'editor.imageClose': 'Close image',
+  'editor.urlAdd': 'Add',
+  'editor.urlInvalid': 'Enter a valid web address, like https://example.com',
+  'editor.bookmarkPlaceholder': 'Paste a link and press Enter',
+  'editor.bookmarkLoading': 'Loading preview…',
+  'editor.bookmarkNoPreview': 'No preview available',
+  'editor.embedPlaceholder': 'Paste a link to embed and press Enter',
+  'editor.embedUnsupported': 'This link can’t be embedded. Supported: YouTube, Vimeo, Loom, Figma, Google Maps, CodePen and Spotify.',
+  'editor.embedCreateBookmark': 'Create bookmark instead',
   'editor.uploadQueued': 'Waiting...',
   'editor.uploadProgress': 'Uploading {{percent}}%',
   'editor.uploadCancel': 'Cancel upload',
@@ -217,6 +225,12 @@ export const en = {
   'ctx.code': 'Code',
   'ctx.callout': 'Callout',
   'ctx.divider': 'Divider',
+  'ctx.copyLink': 'Copy link',
+  'ctx.openInNewTab': 'Open in new tab',
+  'ctx.refreshPreview': 'Refresh preview',
+  'ctx.toBookmark': 'Web bookmark',
+  'ctx.toEmbed': 'Embed',
+  'ctx.toLink': 'Link',
 
   // Slash menu
   'slash.empty': 'No results',
@@ -252,6 +266,16 @@ export const en = {
   'slash.subpageDesc': 'Create a page inside this one',
   'slash.table': 'Table',
   'slash.tableDesc': 'Table with rows and columns',
+  'slash.bookmark': 'Web bookmark',
+  'slash.bookmarkDesc': 'Save a link as a visual card',
+  'slash.embed': 'Embed',
+  'slash.embedDesc': 'Embed a video, map, design or music player',
+
+  // Paste a link into an empty paragraph
+  'paste.title': 'Paste as',
+  'paste.link': 'Link',
+  'paste.bookmark': 'Bookmark',
+  'paste.embed': 'Embed',
 
   // Shared view (read-only public)
   'shared.publicView': 'Public view',

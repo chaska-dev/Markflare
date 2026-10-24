@@ -48,11 +48,28 @@ export type BlockType =
   // un bloque normal (paragraph); lo especial es que al crearlo desde el slash
   // menu agregamos un hijo vacío para que el chevron sea visible de entrada.
   | 'toggle'
-  | 'math';
+  | 'math'
+  // content = a web URL. bookmark shows a link card, embed an iframe (providers
+  // in utils/embed.ts).
+  | 'bookmark'
+  | 'embed';
+
+// Page metadata cached in a bookmark block (props.preview) so the card renders
+// without asking the server again. `url` is the address it was fetched for: a
+// preview whose url differs from the block's content is stale.
+export interface BookmarkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  favicon: string | null;
+  fetchedAt: string;
+}
 
 // Free-form JSON bag stored in blocks.props. Images use width/align/caption,
-// tables headerRow/headerColumn/colWidths, text blocks color; later phases will
-// add more keys without touching the schema.
+// tables headerRow/headerColumn/colWidths, text blocks color, bookmarks preview,
+// embeds width; later phases will add more keys without touching the schema.
 export interface BlockProps {
   width?: number;
   align?: 'left' | 'center' | 'right';
@@ -65,6 +82,8 @@ export interface BlockProps {
   // Text blocks: palette name of the text or background color, e.g. "blue" or
   // "blue_background" (see utils/blockColor.ts). Missing = default.
   color?: string;
+  // Bookmark: cached page metadata (see BookmarkPreview).
+  preview?: BookmarkPreview;
   [key: string]: unknown;
 }
 
@@ -144,6 +163,8 @@ export const BLOCK_TYPES: BlockTypeOption[] = [
   { type: 'table' as BlockType, labelKey: 'slash.table', descriptionKey: 'slash.tableDesc', icon: 'table', label: 'Table', description: 'Table with rows and columns' },
   { type: 'toggle' as BlockType, labelKey: 'slash.toggle', descriptionKey: 'slash.toggleDesc', icon: 'toggle', label: 'Toggle', description: 'Collapsible block with children' },
   { type: 'math' as BlockType, labelKey: 'slash.math', descriptionKey: 'slash.mathDesc', icon: 'math', label: 'Math equation', description: 'Formula with LaTeX / KaTeX' },
+  { type: 'bookmark' as BlockType, labelKey: 'slash.bookmark', descriptionKey: 'slash.bookmarkDesc', icon: 'bookmark', label: 'Web bookmark', description: 'Save a link as a visual card' },
+  { type: 'embed' as BlockType, labelKey: 'slash.embed', descriptionKey: 'slash.embedDesc', icon: 'embed', label: 'Embed', description: 'Embed a video, map, design or music player' },
 ];
 
 export interface SearchResult {

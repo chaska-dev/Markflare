@@ -241,6 +241,12 @@ export const api = {
         `/share/${encodeURIComponent(token)}/page/${encodeURIComponent(pageId)}`
       ),
   },
+  // Metadata of a web page for bookmark blocks. `url` in the answer is where
+  // the page ended up after redirects.
+  linkPreview: (url: string) =>
+    request<{ url: string; title: string | null; description: string | null; image: string | null; siteName: string | null; favicon: string | null }>(
+      `/link-preview?url=${encodeURIComponent(url)}`
+    ),
   search: (query: string) =>
     request<{ results: SearchResult[] }>(`/search?q=${encodeURIComponent(query)}`),
 };

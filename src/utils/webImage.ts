@@ -22,6 +22,13 @@ export function imageUrlFromText(text: string): string | null {
   return url && IMAGE_EXTENSION.test(url.pathname) ? url.href : null;
 }
 
+// Pasted text that is exactly one http(s) link, to an image or anything else.
+export function webUrlFromText(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed || /\s/.test(trimmed)) return null;
+  return httpUrl(trimmed)?.href ?? null;
+}
+
 // Drag types that can carry a web image. Only the type list is readable while
 // dragging; the content can be read on drop.
 export function hasWebImageTypes(dt: DataTransfer | null | undefined): boolean {

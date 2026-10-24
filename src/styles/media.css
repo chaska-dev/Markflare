@@ -392,3 +392,290 @@
     opacity: 0.5;
   }
 }
+
+/* ---- Web bookmark and embed blocks ---- */
+
+/* Bookmark card: text on the left, preview picture on the right. */
+.block-bookmark,
+.readonly-bookmark {
+  margin: 6px 0;
+  max-width: 100%;
+  outline: none;
+}
+
+.bookmark-card {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 84px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.bookmark-card:hover {
+  background: var(--bg-hover);
+}
+
+.block-bookmark:focus-visible .bookmark-card,
+.bookmark-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.bookmark-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.bookmark-title,
+.bookmark-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.bookmark-title {
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.bookmark-description {
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bookmark-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.bookmark-card.is-loading .bookmark-title {
+  opacity: 0.7;
+}
+
+.bookmark-meta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bookmark-favicon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+.bookmark-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-image {
+  position: relative;
+  flex: 0 0 30%;
+  min-width: 88px;
+  max-width: 220px;
+  border-left: 1px solid var(--border-color);
+}
+
+.bookmark-image img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 480px) {
+  .bookmark-image {
+    display: none;
+  }
+}
+
+/* Field that asks for the link (empty bookmark / embed). */
+.block-url-field {
+  margin: 6px 0;
+}
+
+.block-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.block-url-row:focus-within {
+  border-color: var(--accent);
+}
+
+.block-url-row.is-invalid {
+  border-color: var(--danger);
+}
+
+.block-url-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.block-url-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.block-url-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.block-url-submit {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.block-url-submit:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.block-url-submit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.block-url-error {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* Embed: the same wrapper, handles and toolbar as images (.block-image), with
+   an iframe where the picture would be. The frame keeps its aspect ratio (or a
+   fixed height) at whatever width props.width gives it. */
+.block-embed-figure {
+  width: 100%;
+}
+
+.embed-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.embed-iframe {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* The pointer stays with the handle while it is dragged over the frame. */
+.block-embed.is-resizing .embed-iframe {
+  pointer-events: none;
+}
+
+a.block-image-tool {
+  text-decoration: none;
+}
+
+.block-embed--empty,
+.block-embed--unsupported {
+  margin: 6px 0;
+  outline: none;
+}
+
+.block-embed--unsupported {
+  padding: 14px 16px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.block-embed--unsupported:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.block-embed-message {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.block-embed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.block-embed-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.block-embed-action:hover {
+  background: var(--bg-hover);
+}
+
+.block-embed-action--primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* "Paste as" menu (shares .slash-menu for position and background). */
+.paste-link-menu-title {
+  padding: 4px 10px 2px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}

@@ -3,6 +3,13 @@ import { handle } from 'hono/cloudflare-pages';
 import type { Context } from 'hono';
 import { parseMarkdownToBlocks, blocksToMarkdown } from '../../server/shared/markdown';
 import { parseBlockProps, serializeBlockProps } from '../../server/shared/blockProps';
+import {
+  fetchLinkPreview,
+  LinkPreviewError,
+  PreviewHop,
+  PREVIEW_MAX_BYTES,
+  PREVIEW_USER_AGENT,
+} from '../../server/shared/linkPreview';
 
 type Bindings = {
   DB: D1Database;
@@ -414,6 +421,7 @@ app.use('/blocks/*', authMiddleware);
 app.use('/files/upload', authMiddleware);
 app.use('/workspace/*', authMiddleware);
 app.use('/search', authMiddleware);
+app.use('/link-preview', authMiddleware);
 app.use('/auth/token', authMiddleware);
 app.use('/auth/tokens', authMiddleware);
 app.use('/auth/tokens/*', authMiddleware);
@@ -1226,6 +1234,59 @@ app.get('/files/:id', async (c) => {
       : `attachment; filename*=UTF-8''${encodeContentDispositionName(name || 'file')}`
   );
   return new Response(object.body, { headers });
+});
+
+// 9c. GET /api/link-preview?url=... — title, description, image, site name and
+// icon of a web page, for bookmark blocks. Same contract as the local server:
+// 400 invalid or refused URL, 502 the page could not be read, 504 it took too
+// long. Workers can't reach the host's private networks, but the shared rules
+// (public hosts only, default ports, every redirect re-validated) apply anyway.
+// Redirects are followed by hand so each hop goes through those rules.
+async function previewRequest(url: URL, signal: AbortSignal): Promise<PreviewHop> {
+  const res = await fetch(url.href, {
+    method: 'GET',
+    redirect: 'manual',
+    signal,
+    headers: {
+      'User-Agent': PREVIEW_USER_AGENT,
+      Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
+    },
+  });
+  const contentType = res.headers.get('content-type') ?? '';
+  const location = res.headers.get('location');
+  if (res.status >= 300 && res.status < 400) {
+    await res.body?.cancel();
+    return { status: res.status, contentType, location, body: new Uint8Array(0) };
+  }
+  // Read up to the cap, then drop the rest of the stream.
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = res.body?.getReader();
+  while (reader && size < PREVIEW_MAX_BYTES) {
+    const { done, value } = await reader.read();
+    if (done || !value) break;
+    const part = value.length > PREVIEW_MAX_BYTES - size ? value.subarray(0, PREVIEW_MAX_BYTES - size) : value;
+    chunks.push(part);
+    size += part.length;
+  }
+  await reader?.cancel().catch(() => {});
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const part of chunks) {
+    body.set(part, offset);
+    offset += part.length;
+  }
+  return { status: res.status, contentType, location, body };
+}
+
+app.get('/link-preview', async (c) => {
+  try {
+    return c.json(await fetchLinkPreview(c.req.query('url') ?? '', previewRequest));
+  } catch (e) {
+    if (e instanceof LinkPreviewError) return c.json({ error: e.message }, e.status as 400 | 502 | 504);
+    console.error('link preview failed', e);
+    return c.json({ error: 'Could not read that page' }, 502);
+  }
 });
 
 // 12. GET /api/workspace — returns the singleton with the current name and icon.

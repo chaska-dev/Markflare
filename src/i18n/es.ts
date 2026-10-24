@@ -197,6 +197,14 @@ export const es: Record<TranslationKey, string> = {
   'editor.imageResize': 'Arrastra para redimensionar, doble clic para restablecer',
   'editor.imageZoom': 'Ver en tamaño completo',
   'editor.imageClose': 'Cerrar imagen',
+  'editor.urlAdd': 'Añadir',
+  'editor.urlInvalid': 'Escribe una dirección web válida, como https://ejemplo.com',
+  'editor.bookmarkPlaceholder': 'Pega un enlace y pulsa Enter',
+  'editor.bookmarkLoading': 'Cargando vista previa…',
+  'editor.bookmarkNoPreview': 'Vista previa no disponible',
+  'editor.embedPlaceholder': 'Pega un enlace para incrustar y pulsa Enter',
+  'editor.embedUnsupported': 'Este enlace no se puede incrustar. Compatibles: YouTube, Vimeo, Loom, Figma, Google Maps, CodePen y Spotify.',
+  'editor.embedCreateBookmark': 'Crear marcador en su lugar',
   'editor.uploadQueued': 'En espera...',
   'editor.uploadProgress': 'Subiendo {{percent}}%',
   'editor.uploadCancel': 'Cancelar subida',
@@ -217,6 +225,12 @@ export const es: Record<TranslationKey, string> = {
   'ctx.quote': 'Quote',
   'ctx.code': 'Code',
   'ctx.callout': 'Callout',
+  'ctx.copyLink': 'Copiar enlace',
+  'ctx.openInNewTab': 'Abrir en una pestaña nueva',
+  'ctx.refreshPreview': 'Actualizar vista previa',
+  'ctx.toBookmark': 'Marcador web',
+  'ctx.toEmbed': 'Incrustar',
+  'ctx.toLink': 'Enlace',
   'ctx.divider': 'Divider',
 
   // Slash menu
@@ -253,6 +267,16 @@ export const es: Record<TranslationKey, string> = {
   'slash.subpageDesc': 'Crear una página dentro de esta',
   'slash.table': 'Tabla',
   'slash.tableDesc': 'Tabla con filas y columnas',
+  'slash.bookmark': 'Marcador web',
+  'slash.bookmarkDesc': 'Guarda un enlace como tarjeta visual',
+  'slash.embed': 'Incrustar',
+  'slash.embedDesc': 'Incrusta un video, mapa, diseño o reproductor de música',
+
+  // Pegar un enlace en un párrafo vacío
+  'paste.title': 'Pegar como',
+  'paste.link': 'Enlace',
+  'paste.bookmark': 'Marcador',
+  'paste.embed': 'Incrustar',
 
   // Shared view
   'shared.publicView': 'Vista pública',

@@ -17,7 +17,8 @@ and file uploads, and a bilingual interface (English / Spanish).
 ## What you get
 
 - **Block editor** — type `/` for a command menu: headings, lists, to-dos, code, math,
-  tables, quotes, callouts, images, files, subpages.
+  tables, quotes, callouts, images, files, subpages, web bookmarks and embeds (YouTube,
+  Vimeo, Loom, Figma, Google Maps, CodePen, Spotify).
 - **Nested pages** — a page can hold subpages, and deleting a page cascades to them.
 - **Drag & drop** — move blocks around, nest them by dropping in the middle, and drop an
   image or document straight into the page to upload it.

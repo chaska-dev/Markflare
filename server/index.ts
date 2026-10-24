@@ -27,6 +27,8 @@ import {
 const STORED_FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { parseMarkdownToBlocks, blocksToMarkdown } from './shared/markdown';
 import { serializeBlockProps } from './shared/blockProps';
+import { fetchLinkPreview, LinkPreviewError } from './shared/linkPreview';
+import { requestOnce as previewRequest } from './linkFetch';
 
 // Bootstrap
 
@@ -244,6 +246,7 @@ app.use('/api/pages', requireAuth);
 app.use('/api/blocks', requireAuth);
 app.use('/api/files/upload', requireAuth);
 app.use('/api/workspace', requireAuth);
+app.use('/api/link-preview', requireAuth);
 
 // GET /api/workspace — returns the singleton with the current name and icon.
 app.get('/api/workspace', (_req, res) => {
@@ -847,6 +850,22 @@ app.get('/api/search', requireAuth, (req, res) => {
   }
 
   res.json({ results });
+});
+
+// 9c. GET /api/link-preview?url=... — title, description, image, site name and
+// icon of a web page, for bookmark blocks. The URL is fetched from here, so the
+// fetcher refuses private/local targets and pins the connection to a vetted
+// address (see linkFetch.ts). 400 invalid or refused URL, 502 the page could not
+// be read, 504 it took too long.
+app.get('/api/link-preview', async (req, res) => {
+  const raw = typeof req.query.url === 'string' ? req.query.url : '';
+  try {
+    res.json(await fetchLinkPreview(raw, previewRequest));
+  } catch (e) {
+    if (e instanceof LinkPreviewError) return res.status(e.status).json({ error: e.message });
+    console.error('[server] link preview failed', e);
+    res.status(502).json({ error: 'Could not read that page' });
+  }
 });
 
 const uploadsDir = path.resolve(process.cwd(), 'uploads');

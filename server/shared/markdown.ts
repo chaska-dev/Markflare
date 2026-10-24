@@ -435,10 +435,14 @@ function fileHref(content: string): string {
   return /^(https?:|data:)/i.test(content) ? content : `/api/files/${content}`;
 }
 
+function propsOf(block: ExportBlock): Record<string, unknown> | null | undefined {
+  return typeof block.props === 'string' ? parseBlockProps(block.props) : (block.props as Record<string, unknown> | null | undefined);
+}
+
 // The image, plus its caption (props.caption) as an italic line right below.
 function imageToMarkdown(block: ExportBlock, content: string): string {
   const image = `![${linkText(block.language || '', 'image')}](${fileHref(content)})`;
-  const props = typeof block.props === 'string' ? parseBlockProps(block.props) : (block.props as Record<string, unknown> | null | undefined);
+  const props = propsOf(block);
   const caption = typeof props?.caption === 'string' ? props.caption.replace(/\s+/g, ' ').trim() : '';
   return caption ? `${image}\n_${caption.replace(/[\\_*]/g, '\\$&')}_` : image;
 }
@@ -446,6 +450,18 @@ function imageToMarkdown(block: ExportBlock, content: string): string {
 // Brackets would end the link text early.
 function linkText(text: string, fallback: string): string {
   return (text || '').replace(/[\[\]]/g, '').trim() || fallback;
+}
+
+// Web bookmark and embed blocks hold a URL: both export as a link to it. A
+// bookmark is titled with the page title its preview cached (props.preview), an
+// embed shows the address. Parentheses and spaces would end the link target.
+function webLinkToMarkdown(block: ExportBlock, content: string): string {
+  const url = content.trim();
+  if (!/^https?:\/\//i.test(url)) return url;
+  const preview = block.type === 'bookmark' ? propsOf(block)?.preview : null;
+  const cachedTitle = preview && typeof preview === 'object' ? (preview as Record<string, unknown>).title : null;
+  const href = url.replace(/[()\s]/g, c => (c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c)));
+  return `[${linkText(typeof cachedTitle === 'string' ? cachedTitle : '', url)}](${href})`;
 }
 
 function tableToMarkdown(content: string): string | null {
@@ -481,6 +497,8 @@ function blockToMarkdown(block: ExportBlock, index: number): string {
     case 'divider': return '---';
     case 'callout': return `> 💡 ${content}`;
     case 'image': return imageToMarkdown(block, content);
+    case 'bookmark':
+    case 'embed': return webLinkToMarkdown(block, content);
     case 'file': return `[${linkText(block.language || '', 'file')}](${fileHref(content)})`;
     case 'table': return tableToMarkdown(content) ?? '';
     // The block only holds the child page id; the title would need a lookup.

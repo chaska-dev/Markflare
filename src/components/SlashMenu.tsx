@@ -17,6 +17,8 @@ import {
   TableIcon,
   ChevronRightSmallIcon,
   MathIcon,
+  BookmarkIcon,
+  EmbedIcon,
 } from './Icons';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useScrollContainer } from '../hooks/useScrollContainer';
@@ -71,6 +73,10 @@ function SlashIcon({ name }: { name: string }) {
       return <ChevronRightSmallIcon size={size} />;
     case 'math':
       return <MathIcon size={size} />;
+    case 'bookmark':
+      return <BookmarkIcon size={size} />;
+    case 'embed':
+      return <EmbedIcon size={size} />;
     default:
       return <TextIcon size={size} />;
   }

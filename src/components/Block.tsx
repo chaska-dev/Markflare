@@ -29,18 +29,29 @@ import {
   AlignRightIcon,
   CaptionIcon,
   PaletteIcon,
+  BookmarkIcon,
+  EmbedIcon,
+  RefreshIcon,
+  LinkIcon,
 } from './Icons';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
 import { ColorMenu } from './ColorMenu';
 import { EditLinkModal } from './EditLinkModal';
 import { ImageLightbox } from './ImageLightbox';
 import { UploadStatus } from './UploadStatus';
+import { BookmarkBlock } from './BookmarkCard';
+import { EmbedBlock } from './EmbedBlock';
 import { formatFileSize } from '../utils/uploads';
 import { inlineMarkdownToHtml, plainTextToSafeHtml, InlineOptions } from './inlineMarkdown';
 import { useKatexHtml } from '../utils/katexLoader';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useWidthResize } from '../hooks/useWidthResize';
+import { useBookmarkPreview } from '../hooks/useBookmarkPreview';
 import { placeCaret } from '../utils/caret';
 import { blockColor, isColorable } from '../utils/blockColor';
+import { mergeProps } from '../utils/blockProps';
+import { blockUrl, linkUrlFromText } from '../utils/bookmark';
+import { embedFromUrl } from '../utils/embed';
 import {
   TableData,
   TableGrid,
@@ -55,16 +66,7 @@ import {
   parseTsv,
 } from '../utils/table';
 
-// Smallest width (px) the resize handles allow.
-const IMAGE_MIN_WIDTH = 80;
 const CAPTION_MAX_LENGTH = 500;
-
-// Merge a change into a props bag; undefined removes the key.
-function mergeProps(props: BlockProps, patch: Partial<BlockProps>): BlockProps {
-  const next: BlockProps = { ...props, ...patch };
-  for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
-  return next;
-}
 
 // Image block, Notion-style. Without props.width it renders at the image's
 // natural width capped to the column. The two side handles resize it (width in
@@ -109,10 +111,6 @@ function ImageBlock({
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const figureRef = useRef<HTMLElement | null>(null);
   const captionRef = useRef<HTMLElement | null>(null);
-  // Width while a handle is being dragged. Local only: it is saved once, on
-  // pointerup, so a drag doesn't produce a request per pixel.
-  const [liveWidth, setLiveWidth] = useState<number | null>(null);
-  const resizeRef = useRef<{ startX: number; startWidth: number; side: 'left' | 'right'; max: number; width: number; moved: boolean } | null>(null);
   // The caption stays hidden until it has text or the user asks for it.
   const [captionOpen, setCaptionOpen] = useState(false);
   const captionVisible = caption !== '' || captionOpen;
@@ -131,45 +129,15 @@ function ImageBlock({
     onPropsChange?.(block.id, mergeProps(props, patch));
   };
 
-  const startResize = (e: React.PointerEvent<HTMLDivElement>, side: 'left' | 'right') => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    const figure = figureRef.current;
-    const wrapper = wrapperRef.current;
-    if (!figure || !wrapper) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const startWidth = figure.getBoundingClientRect().width;
-    resizeRef.current = {
-      startX: e.clientX,
-      startWidth,
-      side,
-      // The column the block lives in: the wrapper fills it.
-      max: Math.max(IMAGE_MIN_WIDTH, Math.floor(wrapper.getBoundingClientRect().width)),
-      width: startWidth,
-      moved: false,
-    };
-  };
-
-  const moveResize = (e: React.PointerEvent<HTMLDivElement>) => {
-    const r = resizeRef.current;
-    if (!r) return;
-    // A centered image grows on both sides at once, so the dragged edge has to
-    // travel twice as far to stay under the pointer.
-    const delta = (e.clientX - r.startX) * (r.side === 'right' ? 1 : -1) * (align === 'center' ? 2 : 1);
-    r.width = Math.round(Math.min(r.max, Math.max(IMAGE_MIN_WIDTH, r.startWidth + delta)));
-    r.moved = true;
-    setLiveWidth(r.width);
-  };
-
-  const endResize = (e: React.PointerEvent<HTMLDivElement>, commit: boolean) => {
-    const r = resizeRef.current;
-    if (!r) return;
-    resizeRef.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    setLiveWidth(null);
-    if (commit && r.moved && r.width !== savedWidth) updateProps({ width: r.width });
-  };
+  // Width while a handle is being dragged (liveWidth) is local only; the saved
+  // width is written once, when the drag ends.
+  const { liveWidth, handleProps } = useWidthResize({
+    wrapperRef,
+    figureRef,
+    align,
+    savedWidth,
+    onCommit: (width) => updateProps({ width }),
+  });
 
   const commitCaption = (el: HTMLElement) => {
     const text = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, CAPTION_MAX_LENGTH);
@@ -325,16 +293,7 @@ function ImageBlock({
               key={side}
               className={`block-image-handle block-image-handle--${side}`}
               title={t('editor.imageResize')}
-              draggable={false}
-              onPointerDown={(e) => startResize(e, side)}
-              onPointerMove={moveResize}
-              onPointerUp={(e) => endResize(e, true)}
-              onPointerCancel={(e) => endResize(e, false)}
-              onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                if (savedWidth !== undefined) updateProps({ width: undefined });
-              }}
+              {...handleProps(side)}
             />
           ))}
         </div>
@@ -370,6 +329,9 @@ function ImageBlock({
     </div>
   );
 }
+
+// Blocks that render their own UI instead of an editable text line.
+const NOT_TEXT_BLOCKS: BType[] = ['image', 'file', 'subpage', 'table', 'math', 'bookmark', 'embed'];
 
 // Block types the user can transform to from the context menu.
 // Intentionally excludes image/file/subpage/table/toggle: those need an upload
@@ -419,8 +381,9 @@ interface Props {
   onCheckedChange?: (id: string, checked: boolean) => void;
   onLanguageChange?: (id: string, language: string) => void;
   // Replace the block's props bag (image width / alignment / caption, table
-  // header options / column widths).
-  onPropsChange?: (id: string, props: BlockProps) => void;
+  // header options / column widths, bookmark preview). `record: false` saves the
+  // change without adding an undo step (cache fills, see useBookmarkPreview).
+  onPropsChange?: (id: string, props: BlockProps, options?: { record?: boolean }) => void;
   // Optional paste handler. If provided, the contenteditable intercepts paste
   // and forwards (blockId + current DOM content) to the editor, which decides
   // whether to split into multiple blocks via the markdown parser or let the
@@ -491,6 +454,8 @@ export function Block({
   const navigate = useNavigate();
   const { pages } = usePageContext();
   const { t } = useLanguage();
+  // Web bookmarks keep their card data in props.preview; this fetches it when missing.
+  const bookmark = useBookmarkPreview(block, onPropsChange, block.type === 'bookmark');
 
   // Page links show the target page's icon. Resolved at render time so a
   // renamed or re-iconed page updates without touching the stored markdown.
@@ -517,7 +482,7 @@ export function Block({
 
   useEffect(() => {
     if (!contentRef.current) return;
-    if (block.type === 'image' || block.type === 'file' || block.type === 'subpage' || block.type === 'table' || block.type === 'math') return;
+    if (NOT_TEXT_BLOCKS.includes(block.type)) return;
     if (isFocused) {
       // Edit mode: plain text only. Preserves the caret and avoids React
       // rewriting the DOM on each keystroke.
@@ -633,7 +598,7 @@ export function Block({
   const setRef = (el: HTMLDivElement | null) => {
     contentRef.current = el;
     blockRef(el);
-    if (el && block.type !== 'image' && block.type !== 'file' && block.type !== 'subpage' && block.type !== 'table' && block.type !== 'math') {
+    if (el && !NOT_TEXT_BLOCKS.includes(block.type)) {
       // Initial render by mode. For code blocks use textContent directly
       // (no markdown parsing) so the code stays literal.
       if (block.type === 'code') {
@@ -810,6 +775,30 @@ export function Block({
           />
         );
 
+      case 'bookmark':
+        return (
+          <BookmarkBlock
+            block={block}
+            setRef={setRef}
+            onKeyDown={onKeyDown}
+            onContentChange={onContentChange}
+            preview={bookmark.preview}
+            status={bookmark.status}
+          />
+        );
+
+      case 'embed':
+        return (
+          <EmbedBlock
+            block={block}
+            setRef={setRef}
+            onKeyDown={onKeyDown}
+            onContentChange={onContentChange}
+            onPropsChange={onPropsChange}
+            onConvert={(id) => onTransform?.(id, 'bookmark')}
+          />
+        );
+
       case 'paragraph':
       default:
         return renderContentEditable('paragraph');
@@ -840,22 +829,67 @@ export function Block({
     onPropsChange?.(block.id, mergeProps(block.props ?? {}, { color: next === 'default' ? undefined : next }));
   };
 
+  // Bookmark and embed blocks hold a web address, and a paragraph that is only
+  // a link can become either of them: these get the link conversions and actions.
+  const isWebBlock = block.type === 'bookmark' || block.type === 'embed';
+  const linkUrl = isWebBlock ? blockUrl(block.content) : block.type === 'paragraph' ? linkUrlFromText(block.content) : null;
+  const linkConversions: ContextMenuItem[] = onTransform && linkUrl
+    ? [
+        ...(block.type !== 'bookmark'
+          ? [{ label: t('ctx.toBookmark'), icon: <BookmarkIcon size={14} />, onClick: () => onTransform(block.id, 'bookmark') }]
+          : []),
+        ...(block.type !== 'embed' && embedFromUrl(linkUrl)
+          ? [{ label: t('ctx.toEmbed'), icon: <EmbedIcon size={14} />, onClick: () => onTransform(block.id, 'embed') }]
+          : []),
+        ...(isWebBlock
+          ? [{ label: t('ctx.toLink'), icon: <LinkIcon size={14} />, onClick: () => onTransform(block.id, 'paragraph') }]
+          : []),
+      ]
+    : [];
+  const transformItems: ContextMenuItem[] = onTransform
+    ? [
+        // Only the transformable text types offer the plain conversions.
+        ...(TRANSFORM_OPTIONS.some(o => o.type === block.type)
+          ? TRANSFORM_OPTIONS
+              .filter(opt => opt.type !== block.type)
+              .map(opt => ({
+                label: t(opt.labelKey as any) || opt.label,
+                icon: opt.icon,
+                onClick: () => onTransform(block.id, opt.type),
+              }))
+          : []),
+        ...linkConversions,
+      ]
+    : [];
+
   const menuItems: ContextMenuItem[] = [
     // Transform submenu: only appears if onTransform was provided and the
-    // current type is one of the transformable ones.
-    ...(onTransform && TRANSFORM_OPTIONS.some(o => o.type === block.type)
+    // current type has something to turn into.
+    ...(transformItems.length > 0
       ? [
           {
             label: t('ctx.transformTo'),
             header: true,
           },
-          ...TRANSFORM_OPTIONS
-            .filter(opt => opt.type !== block.type)
-            .map(opt => ({
-              label: t(opt.labelKey as any) || opt.label,
-              icon: opt.icon,
-              onClick: () => onTransform(block.id, opt.type),
-            })),
+          ...transformItems,
+          { divider: true as const },
+        ]
+      : []),
+    ...(isWebBlock && linkUrl
+      ? [
+          {
+            label: t('ctx.copyLink'),
+            icon: <CopyIcon size={14} />,
+            onClick: () => { navigator.clipboard.writeText(linkUrl).catch(() => {}); },
+          },
+          {
+            label: t('ctx.openInNewTab'),
+            icon: <ArrowUpRightIcon size={14} />,
+            onClick: () => { window.open(linkUrl, '_blank', 'noopener,noreferrer'); },
+          },
+          ...(block.type === 'bookmark'
+            ? [{ label: t('ctx.refreshPreview'), icon: <RefreshIcon size={14} />, onClick: bookmark.refresh }]
+            : []),
           { divider: true as const },
         ]
       : []),

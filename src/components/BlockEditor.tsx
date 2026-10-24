@@ -6,7 +6,8 @@ import { MentionMenu, filterMentionPages, mentionLinkMarkdown } from './MentionM
 import { ShortcutsModal } from './ShortcutsModal';
 import { FormatToolbar } from './FormatToolbar';
 import { EditLinkModal } from './EditLinkModal';
-import { UploadIcon, XIcon } from './Icons';
+import { UploadIcon, XIcon, BookmarkIcon, EmbedIcon, LinkIcon } from './Icons';
+import { PasteLinkMenu, PasteLinkChoice, PasteLinkOption } from './PasteLinkMenu';
 import { api, ApiError } from '../api/client';
 import { optimizeImage } from '../utils/imageCompress';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, MAX_PARALLEL_UPLOADS, createLimiter } from '../utils/uploads';
@@ -23,7 +24,9 @@ import { BlockPatch, Change, makeUpdate, visibleTarget } from '../utils/blockHis
 import { evenPositions, selectionRoots, withSubtrees } from '../utils/blockSelection';
 import { useBlockHistory } from '../hooks/useBlockHistory';
 import { useBlockSelection } from '../hooks/useBlockSelection';
-import { imageUrlFromText, imageUrlFromDrop, hasWebImageTypes } from '../utils/webImage';
+import { imageUrlFromText, imageUrlFromDrop, hasWebImageTypes, webUrlFromText } from '../utils/webImage';
+import { blockUrl, linkMarkdown, linkUrlFromText } from '../utils/bookmark';
+import { embedFromUrl } from '../utils/embed';
 import { usePageContext } from '../contexts/PageContext';
 import { useLanguage } from '../i18n/LanguageContext';
 // Shared markdown parser (same module used by the backend on import). Used to
@@ -181,7 +184,7 @@ const TURN_INTO_BY_DIGIT: Record<string, BType> = {
   '8': 'code',
 };
 // Blocks that don't hold plain text, so "turn into" doesn't apply.
-const NOT_TURNABLE: BType[] = ['image', 'file', 'subpage', 'table', 'math', 'divider'];
+const NOT_TURNABLE: BType[] = ['image', 'file', 'subpage', 'table', 'math', 'divider', 'bookmark', 'embed'];
 
 // macOS: Cmd+Option+digit. Elsewhere: Ctrl+Shift+digit, like Notion. Ctrl+Alt
 // is also accepted, but only when the key really produced the digit: on many
@@ -198,7 +201,7 @@ function turnIntoShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'metaKey' | 'a
 
 // Blocks whose text is not inline markdown (or that have no text), so the
 // formatting shortcuts leave their keys alone.
-const NO_INLINE_FORMAT: BType[] = ['code', 'table', 'math', 'image', 'file', 'subpage', 'divider'];
+const NO_INLINE_FORMAT: BType[] = ['code', 'table', 'math', 'image', 'file', 'subpage', 'divider', 'bookmark', 'embed'];
 
 // Ctrl/Cmd+B bold, +I italic, +E inline code, +Shift+S strikethrough (+Shift+X
 // too, since some browsers keep Ctrl+Shift+S for themselves) and +K link, like
@@ -280,6 +283,14 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   const mentionOpen = mention !== null && mentionResults.length > 0;
 
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // "Paste as" menu for a link pasted into an empty paragraph. The block already
+  // holds the link as text; the menu can turn it into a bookmark or an embed.
+  const [pasteMenu, setPasteMenu] = useState<{
+    blockId: string;
+    url: string;
+    anchor: { top: number; bottom: number; left: number };
+  } | null>(null);
 
   // Link dialog opened for a text selection (Ctrl/Cmd+K or the format toolbar).
   // start/end/text locate the selection in the block's raw text.
@@ -363,7 +374,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       };
       settle(10);
     },
-    isBlocked: () => slashMenu.visible || mentionOpen || Boolean(linkDraft),
+    isBlocked: () => slashMenu.visible || mentionOpen || Boolean(linkDraft) || Boolean(pasteMenu),
   });
   const selection = useBlockSelection({
     pageId,
@@ -378,7 +389,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     expandBlocks: ids => expandBlocks(ids),
     turnable: type => !NOT_TURNABLE.includes(type),
     turnIntoShortcut,
-    isBlocked: () => slashMenu.visible || mentionOpen || Boolean(linkDraft) || showShortcuts,
+    isBlocked: () => slashMenu.visible || mentionOpen || Boolean(linkDraft) || Boolean(pasteMenu) || showShortcuts,
   });
 
   // Record the change of a block's fields as a history entry. Call it before
@@ -578,8 +589,10 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
   // Replace a block's props bag (image width / alignment / caption). The editor
   // always sends the whole object, and the server replaces rather than merges.
-  const handlePropsChange = (id: string, props: BlockProps) => {
-    recordUpdate(id, { props });
+  // `record: false` skips the undo history, for caches the user didn't edit
+  // (a bookmark's fetched preview).
+  const handlePropsChange = (id: string, props: BlockProps, options?: { record?: boolean }) => {
+    if (options?.record !== false) recordUpdate(id, { props });
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, props } : b));
     if (!id.startsWith('temp-')) {
       // A discrete action, not typing: save it now instead of leaving it in
@@ -704,6 +717,29 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           updaterRef.current?.debounced(blockId, { type: 'image', content: imageUrl });
         }
         setTimeout(() => blockRefs.current[blockId]?.focus(), 0);
+        return;
+      }
+    }
+    // A lone link pasted into an empty paragraph stays a link, and a menu offers
+    // to make it a bookmark or an embed instead.
+    const linkUrl = webUrlFromText(text);
+    if (linkUrl && currentContent === '') {
+      const target = blocks.find(b => b.id === blockId);
+      const el = blockRefs.current[blockId];
+      if (target?.type === 'paragraph' && el && !blocks.some(b => b.parent_id === blockId)) {
+        e.preventDefault();
+        const markdown = linkMarkdown(linkUrl);
+        recordUpdate(blockId, { content: markdown });
+        history.rebase(blockId, markdown);
+        setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, content: markdown } : b));
+        if (!blockId.startsWith('temp-')) {
+          updaterRef.current?.debounced(blockId, { content: markdown });
+        }
+        const rect = el.getBoundingClientRect();
+        setPasteMenu({ blockId, url: linkUrl, anchor: { top: rect.top, bottom: rect.bottom, left: rect.left } });
+        // The text is rendered as a link only while the block is not focused;
+        // the caret goes to the end of the markdown, as after any paste.
+        focusBlock(blockId, Number.MAX_SAFE_INTEGER);
         return;
       }
     }
@@ -1032,18 +1068,32 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
     // Divider gets empty content; everything else preserves it
     // (e.g. heading1 → bullet_list keeps the text).
-    const newContent = newType === 'divider' ? '' : block.content;
+    let newContent = newType === 'divider' ? '' : block.content;
+    // Bookmarks and embeds hold a bare URL; a paragraph holds it as a link.
+    // (A paragraph whose text isn't a link keeps its text.)
+    if (newType === 'bookmark' || newType === 'embed') {
+      newContent = linkUrlFromText(block.content) ?? newContent;
+    } else if (block.type === 'bookmark' || block.type === 'embed') {
+      const url = blockUrl(block.content);
+      if (url) newContent = linkMarkdown(url);
+    }
 
-    recordUpdate(id, { type: newType, content: newContent });
+    // The props that only mean something to the type being left go away with it.
+    const props: BlockProps = { ...(block.props ?? {}) };
+    if (block.type === 'bookmark' && newType !== 'bookmark') delete props.preview;
+    if (block.type === 'embed' && newType !== 'embed') delete props.width;
+    const propsChanged = Object.keys(props).length !== Object.keys(block.props ?? {}).length;
+
+    recordUpdate(id, { type: newType, content: newContent, ...(propsChanged ? { props } : {}) });
     history.rebase(id, newContent);
 
     // Optimistic update: local state first, then backend. If the request
     // fails the user still sees the local change; we log for debugging.
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, type: newType, content: newContent } : b));
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, type: newType, content: newContent, ...(propsChanged ? { props } : {}) } : b));
 
     if (!id.startsWith('temp-')) {
       try {
-        await api.blocks.update(id, { type: newType, content: newContent });
+        await api.blocks.update(id, { type: newType, content: newContent, ...(propsChanged ? { props } : {}) });
       } catch (e) {
         console.error('Failed to transform block', e);
       }
@@ -1347,7 +1397,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       // subpage blocks are intentionally non-deletable inline: the reference
       // only goes away when the referenced page is deleted from the sidebar.
       // divider/image/file still get the default non-editable treatment.
-      const nonEditable = ['divider', 'image', 'file'].includes(block.type);
+      const nonEditable = ['divider', 'image', 'file', 'bookmark', 'embed'].includes(block.type);
       const isSubpage = block.type === 'subpage';
       if (isSubpage) {
         e.preventDefault();
@@ -1729,6 +1779,27 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     }
     history.rebase(id, patch.content ?? block.content);
   };
+
+  // The paste menu's answer. "Link" keeps the text as pasted.
+  const handlePasteChoice = (choice: PasteLinkChoice) => {
+    const menu = pasteMenu;
+    setPasteMenu(null);
+    if (!menu || choice === 'link') return;
+    const block = blocksRef.current.find(b => b.id === menu.blockId);
+    // The text changed under the menu: don't guess.
+    if (!block || block.type !== 'paragraph' || block.content !== linkMarkdown(menu.url)) return;
+    void handleTransform(menu.blockId, choice);
+    focusBlock(menu.blockId);
+  };
+
+  const pasteMenuOptions = useMemo<PasteLinkOption[]>(() => {
+    if (!pasteMenu) return [];
+    return [
+      { id: 'link', label: t('paste.link'), icon: <LinkIcon size={16} /> },
+      { id: 'bookmark', label: t('paste.bookmark'), icon: <BookmarkIcon size={16} /> },
+      ...(embedFromUrl(pasteMenu.url) ? [{ id: 'embed' as const, label: t('paste.embed'), icon: <EmbedIcon size={16} /> }] : []),
+    ];
+  }, [pasteMenu, t]);
 
   const handleSlashSelect = async (type: BType) => {
     if (!slashMenu.blockId) return;
@@ -2151,6 +2222,15 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           results={mentionResults}
           onSelect={handleMentionSelect}
           onClose={handleMentionClose}
+        />
+      )}
+
+      {pasteMenu && (
+        <PasteLinkMenu
+          anchor={pasteMenu.anchor}
+          options={pasteMenuOptions}
+          onSelect={handlePasteChoice}
+          onClose={() => setPasteMenu(null)}
         />
       )}
 

@@ -8,11 +8,15 @@ import { useNavigate } from 'react-router-dom';
 import { Block } from '../types';
 import { DocumentIcon, ArrowUpRightIcon, PaperclipIcon, CopyIcon, CheckIcon } from './Icons';
 import { ImageLightbox } from './ImageLightbox';
+import { BookmarkCard } from './BookmarkCard';
+import { EmbedFrame } from './EmbedBlock';
 import { useLanguage } from '../i18n/LanguageContext';
 import { inlineMarkdownToHtml, plainTextToSafeHtml } from './inlineMarkdown';
 import { useKatexHtml } from '../utils/katexLoader';
 import { parseTableData, tableOptions, toGrid } from '../utils/table';
 import { blockColor } from '../utils/blockColor';
+import { blockUrl, readPreview } from '../utils/bookmark';
+import { embedFromUrl } from '../utils/embed';
 
 interface Props {
   block: Block;
@@ -134,6 +138,41 @@ export function ReadOnlyBlock({ block, shareToken }: Props) {
               {caption && <figcaption className="block-image-caption">{caption}</figcaption>}
             </figure>
           ) : null}
+        </div>
+      );
+    }
+    case 'bookmark': {
+      // The card comes from the preview cached in the block: the public view
+      // never fetches the page itself.
+      const url = blockUrl(block.content);
+      if (!url) return null;
+      return (
+        <div className="readonly-block readonly-bookmark">
+          <BookmarkCard url={url} preview={readPreview(block.props, url)} />
+        </div>
+      );
+    }
+    case 'embed': {
+      const url = blockUrl(block.content);
+      if (!url) return null;
+      const info = embedFromUrl(url);
+      // Unsupported sites are never framed: show them as a plain link card.
+      if (!info) {
+        return (
+          <div className="readonly-block readonly-bookmark">
+            <BookmarkCard url={url} preview={null} />
+          </div>
+        );
+      }
+      const width = typeof block.props?.width === 'number' && block.props.width > 0 ? block.props.width : undefined;
+      return (
+        <div className="readonly-block readonly-image readonly-embed" data-align="center">
+          <figure
+            className={`block-image-figure block-embed-figure${width ? ' block-image-figure--sized' : ''}`}
+            style={width ? { width } : undefined}
+          >
+            <EmbedFrame info={info} />
+          </figure>
         </div>
       );
     }
