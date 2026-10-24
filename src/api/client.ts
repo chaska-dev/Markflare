@@ -196,8 +196,10 @@ export const api = {
       request<{ block: Block }>(`/pages/${pageId}/blocks`, { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Pick<Block, 'content' | 'type' | 'checked' | 'language' | 'position' | 'parent_id' | 'collapsed' | 'props'>>) =>
       request<{ block: Block }>(`/blocks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: string) =>
-      request<{ success: boolean }>(`/blocks/${id}`, { method: 'DELETE' }),
+    // `keepFile` leaves the upload of an image/file block in storage, so that
+    // undoing the delete can bring the block back with its file.
+    delete: (id: string, opts?: { keepFile?: boolean }) =>
+      request<{ success: boolean }>(`/blocks/${id}${opts?.keepFile ? '?keep_file=1' : ''}`, { method: 'DELETE' }),
     reorder: (blocks: { id: string; position: number }[]) =>
       request<{ success: boolean }>('/blocks/reorder', { method: 'PUT', body: JSON.stringify({ blocks }) }),
   },

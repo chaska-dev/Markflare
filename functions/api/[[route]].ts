@@ -1049,11 +1049,14 @@ app.put('/blocks/:id', async (c) => {
 // bytes too. But the same file id can be referenced by several blocks (a
 // copied or duplicated image), so the upload is only dropped once no block
 // points at it any more — deleting one copy must not break the others.
+// With ?keep_file=1 the upload stays (the editor's undo can bring the block
+// back); it is then cleaned up with its page, like any file tied to a page.
 app.delete('/blocks/:id', async (c) => {
   const id = c.req.param('id');
   const block: any = await c.env.DB.prepare('SELECT type, content FROM blocks WHERE id = ?').bind(id).first();
   await c.env.DB.prepare('DELETE FROM blocks WHERE id = ?').bind(id).run();
 
+  if (c.req.query('keep_file') === '1') return c.json({ success: true });
   if (!block || (block.type !== 'image' && block.type !== 'file')) {
     return c.json({ success: true });
   }

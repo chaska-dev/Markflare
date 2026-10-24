@@ -395,6 +395,29 @@ body {
   background-color: rgba(55, 53, 47, 0.06);
 }
 
+/* Multi-block selection (Escape, Shift+click, rubber band). Blue like Notion's,
+   from the same palette as the block colors, so it reads in both themes. */
+.block-wrapper.block-wrapper--selected,
+.block-wrapper.block-wrapper--selected:hover {
+  background-color: color-mix(in srgb, var(--color-blue, #529cca) 22%, transparent);
+}
+[data-theme="light"] .block-wrapper.block-wrapper--selected,
+[data-theme="light"] .block-wrapper.block-wrapper--selected:hover {
+  background-color: color-mix(in srgb, var(--color-blue, #337ea9) 18%, transparent);
+}
+.block-wrapper--selected .block-handle {
+  opacity: 1;
+}
+/* Rubber band drawn while dragging in the margin; viewport coordinates. */
+.block-selection-rect {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--color-blue, #529cca) 70%, transparent);
+  background: color-mix(in srgb, var(--color-blue, #529cca) 14%, transparent);
+  border-radius: 2px;
+}
+
 .block-wrapper--drop-top:hover,
 .drop-top:hover,
 .block-wrapper--drop-bottom:hover,

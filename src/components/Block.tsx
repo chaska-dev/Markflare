@@ -382,7 +382,7 @@ interface TransformOption {
   label: string;
   icon: React.ReactNode;
 }
-const TRANSFORM_OPTIONS: TransformOption[] = [
+export const TRANSFORM_OPTIONS: TransformOption[] = [
   { type: 'paragraph', labelKey: 'ctx.paragraph', label: 'Paragraph', icon: <TextIcon size={14} /> },
   { type: 'heading1', labelKey: 'ctx.heading1', label: 'Heading 1', icon: <HeadingIcon size={14} /> },
   { type: 'heading2', labelKey: 'ctx.heading2', label: 'Heading 2', icon: <HeadingIcon size={14} /> },
@@ -436,6 +436,11 @@ interface Props {
   // Duplicate this block (and its children) right after it. If not provided,
   // the "Duplicate" context menu item is hidden.
   onDuplicate?: (id: string) => void;
+  // Part of the editor's multi-block selection. A selected block draws highlighted
+  // and its context menu (right-click, handle) belongs to the whole selection:
+  // the editor opens it through onSelectionMenu instead of the block's own.
+  selected?: boolean;
+  onSelectionMenu?: (x: number, y: number) => void;
   // Client-only upload state for this block (image/file being uploaded or
   // failed). Absent for blocks that aren't mid-upload.
   upload?: UploadState;
@@ -472,6 +477,8 @@ export function Block({
   onDelete,
   onTransform,
   onDuplicate,
+  selected = false,
+  onSelectionMenu,
   upload,
   fileSize,
   onPickFile,
@@ -820,6 +827,10 @@ export function Block({
   const handleContextMenu = (e: React.DragEvent | React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (selected && onSelectionMenu) {
+      onSelectionMenu(e.clientX, e.clientY);
+      return;
+    }
     setMenuPos({ x: e.clientX, y: e.clientY });
   };
 
@@ -891,9 +902,10 @@ export function Block({
       data-block-id={block.id}
       data-block-type={block.type}
       data-color={color}
-      className={`block-wrapper ${dropIndicator ? `block-wrapper--drop-${dropIndicator} drop-${dropIndicator}` : ''}`}
+      className={`block-wrapper ${dropIndicator ? `block-wrapper--drop-${dropIndicator} drop-${dropIndicator}` : ''}${selected ? ' block-wrapper--selected' : ''}`}
       data-depth={depth}
       style={{ '--depth': depth } as React.CSSProperties}
+      onContextMenu={selected && onSelectionMenu ? handleContextMenu : undefined}
       onDragOver={onDragOver ? (e) => {
         e.preventDefault();
         onDragOver(block.id, e);
@@ -936,7 +948,13 @@ export function Block({
           onClick={(e) => {
             // Also open on left-click for touch/trackpad convenience.
             e.stopPropagation();
+            // Shift+click selects blocks (the editor handles it on mousedown).
+            if (e.shiftKey) return;
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            if (selected && onSelectionMenu) {
+              onSelectionMenu(rect.right + 4, rect.top);
+              return;
+            }
             setMenuPos({ x: rect.right + 4, y: rect.top });
           }}
           title="Drag to move or click for options"

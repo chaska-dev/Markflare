@@ -10,8 +10,9 @@ import type { TranslationKey } from '../i18n/en';
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform);
 
 interface Row {
-  // Each entry is one key cap; '+' separators are drawn by the layout.
-  keys: string[];
+  // Each entry is one key cap; '+' separators are drawn by the layout. A
+  // { t } entry is a word for the cap (a mouse gesture), translated at render.
+  keys: (string | { t: TranslationKey })[];
   labelKey: TranslationKey;
 }
 
@@ -42,6 +43,24 @@ function buildGroups(): Group[] {
       ],
     },
     {
+      titleKey: 'shortcuts.groupSelection',
+      rows: [
+        { keys: ['Esc'], labelKey: 'shortcuts.selectBlock' },
+        { keys: [shift, '↑ / ↓'], labelKey: 'shortcuts.extendSelection' },
+        { keys: [shift, { t: 'shortcuts.keyClick' }], labelKey: 'shortcuts.rangeSelect' },
+        { keys: [{ t: 'shortcuts.keyDrag' }], labelKey: 'shortcuts.dragSelect' },
+        { keys: [mod, 'A'], labelKey: 'shortcuts.selectAll' },
+        { keys: ['↑ / ↓'], labelKey: 'shortcuts.moveSelection' },
+        { keys: ['Enter'], labelKey: 'shortcuts.editSelected' },
+        { keys: ['Tab'], labelKey: 'shortcuts.indentSelected' },
+        { keys: [shift, 'Tab'], labelKey: 'shortcuts.outdentSelected' },
+        { keys: [mod, 'D'], labelKey: 'shortcuts.duplicate' },
+        { keys: [mod, 'C'], labelKey: 'shortcuts.copyBlocks' },
+        { keys: [mod, 'X'], labelKey: 'shortcuts.cutBlocks' },
+        { keys: ['⌫'], labelKey: 'shortcuts.deleteBlocks' },
+      ],
+    },
+    {
       titleKey: 'shortcuts.groupTurnInto',
       rows: [
         { keys: [...turn, '0'], labelKey: 'ctx.paragraph' },
@@ -67,7 +86,12 @@ function buildGroups(): Group[] {
     },
     {
       titleKey: 'shortcuts.groupGeneral',
-      rows: [{ keys: [mod, '/'], labelKey: 'shortcuts.help' }],
+      rows: [
+        { keys: [mod, 'Z'], labelKey: 'shortcuts.undo' },
+        { keys: [mod, shift, 'Z'], labelKey: 'shortcuts.redo' },
+        ...(IS_MAC ? [] : [{ keys: [mod, 'Y'], labelKey: 'shortcuts.redo' } as Row]),
+        { keys: [mod, '/'], labelKey: 'shortcuts.help' },
+      ],
     },
   ];
 }
@@ -130,11 +154,14 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
             <section key={group.titleKey} className="shortcuts-group">
               <h3 className="shortcuts-group-title">{t(group.titleKey)}</h3>
               {group.rows.map(row => (
-                <div key={row.labelKey + row.keys.join('+')} className="shortcuts-row">
+                <div
+                  key={row.labelKey + row.keys.map(k => (typeof k === 'string' ? k : k.t)).join('+')}
+                  className="shortcuts-row"
+                >
                   <span className="shortcuts-label">{t(row.labelKey)}</span>
                   <span className="shortcuts-keys">
                     {row.keys.map((k, i) => (
-                      <kbd key={i} className="shortcuts-key">{k}</kbd>
+                      <kbd key={i} className="shortcuts-key">{typeof k === 'string' ? k : t(k.t)}</kbd>
                     ))}
                   </span>
                 </div>

@@ -10,7 +10,7 @@ import { UploadIcon, XIcon } from './Icons';
 import { api, ApiError } from '../api/client';
 import { optimizeImage } from '../utils/imageCompress';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB, MAX_PARALLEL_UPLOADS, createLimiter } from '../utils/uploads';
-import { getCaretOffset, getCaretRect, placeCaret } from '../utils/caret';
+import { getCaretOffset, getCaretRect, getSelectionOffsets, placeCaret } from '../utils/caret';
 import {
   InlineFormat,
   applyInlineFormat,
@@ -19,6 +19,10 @@ import {
   cleanLinkText,
 } from '../utils/inlineFormat';
 import { collectSubtree, sortedChildren, positionBetween } from '../utils/blockTree';
+import { BlockPatch, Change, makeUpdate, visibleTarget } from '../utils/blockHistory';
+import { evenPositions, selectionRoots, withSubtrees } from '../utils/blockSelection';
+import { useBlockHistory } from '../hooks/useBlockHistory';
+import { useBlockSelection } from '../hooks/useBlockSelection';
 import { imageUrlFromText, imageUrlFromDrop, hasWebImageTypes } from '../utils/webImage';
 import { usePageContext } from '../contexts/PageContext';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -182,7 +186,7 @@ const NOT_TURNABLE: BType[] = ['image', 'file', 'subpage', 'table', 'math', 'div
 // macOS: Cmd+Option+digit. Elsewhere: Ctrl+Shift+digit, like Notion. Ctrl+Alt
 // is also accepted, but only when the key really produced the digit: on many
 // layouts Ctrl+Alt is AltGr, and Ctrl+Alt+2 must stay free to type "@".
-function turnIntoShortcut(e: React.KeyboardEvent): BType | null {
+function turnIntoShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'metaKey' | 'altKey' | 'ctrlKey' | 'shiftKey'>): BType | null {
   const digit = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)?.[1];
   if (!digit) return null;
   const mac = e.metaKey && e.altKey && !e.ctrlKey && !e.shiftKey;
@@ -318,6 +322,81 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   // createBlock calls still waiting for their server id, so an upload aimed at
   // such a block can wait for the real id before updating it.
   const inflightCreatesRef = useRef(new Map<string, Promise<BlockType | null>>());
+  const editorRef = useRef<HTMLDivElement>(null);
+  // Ids in render order (collapsed subtrees left out); set while rendering.
+  const visibleIdsRef = useRef<string[]>([]);
+
+  // Block-level undo/redo and the multi-block selection (see the hooks). After
+  // an undo or redo, focus goes to the block it touched; when it touched
+  // several, they become the selection.
+  const history = useBlockHistory({
+    pageId,
+    blocksRef,
+    setBlocks,
+    updaterRef,
+    inflightCreatesRef,
+    discardJob: id => discardJob(id),
+    visibleIds: () => visibleIdsRef.current,
+    onApplied: (touched, fallbackId) => {
+      const settle = (tries: number) => {
+        const list = blocksRef.current;
+        const order = visibleIdsRef.current;
+        // Blocks the undo created may not have been rendered yet.
+        if (tries > 0 && touched.some(id => !list.some(b => b.id === id))) {
+          setTimeout(() => settle(tries - 1), 16);
+          return;
+        }
+        const targets = [...new Set(touched.map(id => visibleTarget(list, history.resolveId(id))).filter((id): id is string => id !== null))]
+          .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+        const ready = targets.every(id => document.getElementById(`block-${id}`));
+        if (!ready && tries > 0) {
+          setTimeout(() => settle(tries - 1), 16);
+          return;
+        }
+        let focusId: string | null = null;
+        if (targets.length >= 2) selection.selectBlocks(targets);
+        else if (targets.length === 1) focusId = targets[0];
+        else if (fallbackId && list.some(b => b.id === fallbackId)) focusId = fallbackId;
+        const scrollId = focusId ?? targets[0];
+        if (scrollId) document.getElementById(`block-${scrollId}`)?.scrollIntoView({ block: 'nearest' });
+        if (focusId) focusBlock(focusId, Number.MAX_SAFE_INTEGER);
+      };
+      settle(10);
+    },
+    isBlocked: () => slashMenu.visible || mentionOpen || Boolean(linkDraft),
+  });
+  const selection = useBlockSelection({
+    pageId,
+    editorRef,
+    blocks,
+    blocksRef,
+    visibleIds: () => visibleIdsRef.current,
+    history,
+    hasUpload: id => jobsRef.current.has(id),
+    duplicateBlocks: (rootIds, focus) => duplicateBlocks(rootIds, focus),
+    focusBlock: (id, caret) => focusBlock(id, caret),
+    expandBlocks: ids => expandBlocks(ids),
+    turnable: type => !NOT_TURNABLE.includes(type),
+    turnIntoShortcut,
+    isBlocked: () => slashMenu.visible || mentionOpen || Boolean(linkDraft) || showShortcuts,
+  });
+
+  // Record the change of a block's fields as a history entry. Call it before
+  // the state changes: the "before" side is read from the current list.
+  const recordUpdate = (id: string, patch: BlockPatch) => {
+    const block = blocksRef.current.find(b => b.id === id);
+    const update = block && makeUpdate(block, patch);
+    if (update) history.record([update]);
+  };
+
+  // Show the children of collapsed blocks that just received a child. The
+  // collapsed state is not part of undo.
+  const expandBlocks = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const set = new Set(ids);
+    setBlocks(prev => prev.map(b => set.has(b.id) ? { ...b, collapsed: false } : b));
+    for (const id of ids) persistNow(id, { collapsed: false });
+  };
 
   // Load initialBlocks when page changes (also on first mount).
   useEffect(() => {
@@ -402,6 +481,10 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
   // Local state + debounced save for new content, without touching the menus.
   const applyContent = (id: string, content: string) => {
+    // Typing in a focused block is covered by its focus baseline (see
+    // useBlockHistory); text changed while the block isn't focused (the link
+    // editor) is its own history entry.
+    if (history.baselineContent(id) === undefined) recordUpdate(id, { content });
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, content } : b));
     if (!id.startsWith('temp-')) {
       updaterRef.current?.debounced(id, { content });
@@ -478,6 +561,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   };
 
   const handleCheckedChange = (id: string, checked: boolean) => {
+    recordUpdate(id, { checked });
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, checked } : b));
     if (!id.startsWith('temp-')) {
       updaterRef.current?.debounced(id, { checked });
@@ -485,6 +569,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   };
 
   const handleLanguageChange = (id: string, language: string) => {
+    recordUpdate(id, { language });
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, language } : b));
     if (!id.startsWith('temp-')) {
       updaterRef.current?.debounced(id, { language });
@@ -494,6 +579,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   // Replace a block's props bag (image width / alignment / caption). The editor
   // always sends the whole object, and the server replaces rather than merges.
   const handlePropsChange = (id: string, props: BlockProps) => {
+    recordUpdate(id, { props });
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, props } : b));
     if (!id.startsWith('temp-')) {
       // A discrete action, not typing: save it now instead of leaving it in
@@ -611,6 +697,8 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       const target = blocks.find(b => b.id === blockId);
       if (target?.type === 'paragraph' && !blocks.some(b => b.parent_id === blockId)) {
         e.preventDefault();
+        recordUpdate(blockId, { type: 'image', content: imageUrl });
+        history.rebase(blockId, imageUrl);
         setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, type: 'image', content: imageUrl } : b));
         if (!blockId.startsWith('temp-')) {
           updaterRef.current?.debounced(blockId, { type: 'image', content: imageUrl });
@@ -640,6 +728,14 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     if (currentContent === '' && detectedTitle) {
       newType = 'heading1';
       newContent = detectedTitle;
+    }
+
+    // One undo step for the whole paste: the current block's new text/type and
+    // the blocks created below. The text now in the block is not a typed edit.
+    const currentUpdate = makeUpdate(current, { type: newType, content: newContent });
+    if (rest.length === 0) {
+      if (currentUpdate) history.record([currentUpdate]);
+      history.rebase(blockId, newContent);
     }
 
     // Update the current block. If the type matches only the content changes
@@ -709,12 +805,18 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       };
     });
 
+    history.record([
+      ...(currentUpdate ? [currentUpdate] : []),
+      ...tempBlocks.map((block): Change => ({ op: 'create', block })),
+    ]);
+    history.rebase(blockId, newContent);
+
     // Insert all in one local-state pass.
     setBlocks(prev => [...prev, ...tempBlocks].sort((a, b) => a.position - b.position));
 
     // Persist in parallel (faster than sequential, takes advantage of batching).
     // The temp → real-id swap follows the createBlock pattern.
-    const promises = tempBlocks.map(async (tempBlock) => {
+    const promises = tempBlocks.map(async (tempBlock): Promise<BlockType | null> => {
       try {
         const res = await api.blocks.create(pageId, {
           type: tempBlock.type,
@@ -722,19 +824,25 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           position: tempBlock.position,
           parent_id: tempBlock.parent_id,
         });
+        history.noteSwap(tempBlock.id, res.block.id);
         setBlocks(prev => prev.map(b => b.id === tempBlock.id ? res.block : b));
         if (blockRefs.current[tempBlock.id]) {
           blockRefs.current[res.block.id] = blockRefs.current[tempBlock.id];
           delete blockRefs.current[tempBlock.id];
         }
-        return res.block.id;
+        return res.block;
       } catch (err) {
         console.error('Failed to create block from paste', err);
-        return tempBlock.id;
+        return null;
       }
     });
+    // Undo/redo wait for these creates like for any block still being saved.
+    tempBlocks.forEach((tempBlock, i) => {
+      inflightCreatesRef.current.set(tempBlock.id, promises[i]);
+      void promises[i].finally(() => inflightCreatesRef.current.delete(tempBlock.id));
+    });
 
-    const realIds = await Promise.all(promises);
+    const realIds = (await Promise.all(promises)).map((saved, i) => saved ? saved.id : tempBlocks[i].id);
 
     // Focus the last new block, cursor at end.
     const lastTempId = tempBlocks[tempBlocks.length - 1].id;
@@ -802,7 +910,10 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       newPosition = lastRoot ? lastRoot.position + 1000 : 0;
     }
 
-    setBlocks(prev => [...prev, newBlock].sort((a, b) => a.position - b.position));
+    // The block shows up at its final place right away, not at position 0.
+    const placed = { ...newBlock, position: newPosition };
+    history.record([{ op: 'create', block: placed }]);
+    setBlocks(prev => [...prev, placed].sort((a, b) => a.position - b.position));
 
     setTimeout(() => {
       const el = blockRefs.current[newId];
@@ -811,6 +922,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
     const persist = (async () => {
       const res = await api.blocks.create(pageId, { type, content, position: newPosition, parent_id: parentId, language });
+      history.noteSwap(newId, res.block.id);
       // An upload may have taken over this block while the request was in
       // flight (e.g. /image right after Enter): keep what it shows locally and
       // let its bookkeeping follow the new id.
@@ -869,9 +981,11 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       return null;
     })();
 
-    // A block deleted mid-upload must not come back when the upload finishes.
-    for (const bid of toRemove) discardJob(bid);
-    setBlocks(prev => prev.filter(b => !toRemove.has(b.id)));
+    // The whole subtree is one history entry. A block deleted mid-upload (the
+    // history engine drops its upload job) has nothing to bring back, so it is
+    // left out of the entry. Uploads of image/file blocks stay in storage.
+    const changes: Change[] = [...toRemove].map(bid => ({ op: 'delete', block: blocks.find(b => b.id === bid)! }));
+    const deletion = history.perform(changes, changes.filter(c => c.op === 'delete' && !jobsRef.current.has(c.block.id)));
 
     setTimeout(() => {
       // Focus direction:
@@ -904,16 +1018,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       }
     }, 0);
 
-    // Delete in backend: only persisted blocks.
-    for (const bid of toRemove) {
-      if (!bid.startsWith('temp-')) {
-        try {
-          await api.blocks.delete(bid);
-        } catch (e) {
-          console.error('Failed to delete block', e);
-        }
-      }
-    }
+    await deletion;
   };
 
   // Transform a block's type (e.g. paragraph → heading1) preserving its
@@ -928,6 +1033,9 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     // Divider gets empty content; everything else preserves it
     // (e.g. heading1 → bullet_list keeps the text).
     const newContent = newType === 'divider' ? '' : block.content;
+
+    recordUpdate(id, { type: newType, content: newContent });
+    history.rebase(id, newContent);
 
     // Optimistic update: local state first, then backend. If the request
     // fails the user still sees the local change; we log for debugging.
@@ -978,6 +1086,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       : positionBetween(target.position, beyond?.position);
 
     if (newPosition !== target.position && newPosition !== beyond?.position) {
+      recordUpdate(id, { position: newPosition });
       setBlocks(prev => prev.map(b => b.id === id ? { ...b, position: newPosition } : b));
       persistNow(id, { position: newPosition });
     } else {
@@ -986,6 +1095,10 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       const order = siblings.filter(b => b.id !== id);
       order.splice(to, 0, block);
       const renumbered = new Map(order.map((b, i) => [b.id, (i + 1) * 1000]));
+      history.record(order.flatMap((b): Change[] => {
+        const update = makeUpdate(b, { position: renumbered.get(b.id)! });
+        return update ? [update] : [];
+      }));
       setBlocks(prev => prev.map(b => renumbered.has(b.id) ? { ...b, position: renumbered.get(b.id)! } : b));
       const saved = order
         .filter(b => !b.id.startsWith('temp-'))
@@ -997,33 +1110,47 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     focusBlock(id, caret);
   };
 
-  // Duplicate a block and its descendants right after it. The copy appears
-  // at once under temp ids; the server rows are created parent-first so each
-  // child can point at its parent's real id.
-  const duplicateBlock = (id: string) => {
+  // Duplicate blocks and their descendants. Each copy appears at once under
+  // temp ids, right after its original (copies of several blocks that share a
+  // parent go after the last of them, in order); the server rows are created
+  // parent-first so each child can point at its parent's real id. All copies
+  // are one history entry. Returns the ids (temp until saved) of the copies of
+  // the given blocks.
+  const duplicateBlocks = (rootIds: string[], focus = true): string[] => {
     const list = blocksRef.current;
-    const source = list.find(b => b.id === id);
-    if (!source) return;
     // Pruned with their subtree: subpages (a second block pointing at the same
     // page) and blocks whose file is still uploading (no content yet).
-    const tree = collectSubtree(list, id, b => b.type === 'subpage' || jobsRef.current.has(b.id));
-    if (tree.length === 0) return;
+    const trees = selectionRoots(list, rootIds)
+      .map(id => collectSubtree(list, id, b => b.type === 'subpage' || jobsRef.current.has(b.id)))
+      .filter(tree => tree.length > 0);
+    if (trees.length === 0) return [];
 
-    const idMap = new Map(tree.map(({ block }) => [block.id, `temp-${crypto.randomUUID()}`]));
-    const siblings = sortedChildren(list, source.parent_id);
-    const next = siblings[siblings.findIndex(b => b.id === id) + 1];
-    const rootPosition = positionBetween(source.position, next?.position);
+    const idMap = new Map(trees.flatMap(tree => tree.map(({ block }): [string, string] => [block.id, `temp-${crypto.randomUUID()}`])));
+    const rootPositions = new Map<string, number>();
+    const byParent = new Map<string | null, typeof trees>();
+    for (const tree of trees) {
+      const parent = tree[0].block.parent_id ?? null;
+      byParent.set(parent, [...(byParent.get(parent) ?? []), tree]);
+    }
+    for (const [parent, group] of byParent) {
+      const siblings = sortedChildren(list, parent);
+      const last = group[group.length - 1][0].block;
+      const next = siblings[siblings.findIndex(b => b.id === last.id) + 1];
+      const positions = evenPositions(group.length, last.position, next?.position);
+      group.forEach((tree, i) => rootPositions.set(tree[0].block.id, positions[i]));
+    }
     const now = new Date().toISOString();
-    const copies: BlockType[] = tree.map(({ block, depth }) => ({
+    const copies: BlockType[] = trees.flatMap(tree => tree.map(({ block, depth }) => ({
       ...block,
       id: idMap.get(block.id)!,
-      parent_id: depth === 0 ? source.parent_id : idMap.get(block.parent_id!)!,
-      position: depth === 0 ? rootPosition : block.position,
+      parent_id: depth === 0 ? block.parent_id : idMap.get(block.parent_id!)!,
+      position: depth === 0 ? rootPositions.get(block.id)! : block.position,
       created_at: now,
       updated_at: now,
-    }));
+    })));
+    history.record(copies.map((block): Change => ({ op: 'create', block })));
     setBlocks(prev => [...prev, ...copies].sort((a, b) => a.position - b.position));
-    focusBlock(copies[0].id, Number.MAX_SAFE_INTEGER);
+    if (focus) focusBlock(copies[0].id, Number.MAX_SAFE_INTEGER);
 
     // Copy id -> its pending server row. Pre-order guarantees a parent is
     // registered before its children look it up.
@@ -1056,6 +1183,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
             saved = (await api.blocks.update(saved.id, { checked: copy.checked, collapsed: copy.collapsed })).block;
           }
           const hadFocus = document.activeElement === blockRefs.current[copy.id];
+          history.noteSwap(copy.id, saved.id);
           // Children still in the list point at the temp id; follow the swap.
           setBlocks(prev => prev.map(b => b.id === copy.id
             ? saved
@@ -1077,6 +1205,11 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       inflightCreatesRef.current.set(copy.id, promise);
       void promise.finally(() => inflightCreatesRef.current.delete(copy.id));
     }
+    return trees.map(tree => idMap.get(tree[0].block.id)!);
+  };
+
+  const duplicateBlock = (id: string) => {
+    duplicateBlocks([id]);
   };
 
   const handleKeyDown = (id: string, e: React.KeyboardEvent) => {
@@ -1102,6 +1235,27 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         else applyInlineFormat(el, inline);
         return;
       }
+    }
+    if (e.key === 'Escape' && !mod && !e.shiftKey && !e.altKey) {
+      // Selects the block (focus leaves the text); Escape again clears it.
+      e.preventDefault();
+      selection.selectBlock(id);
+      return;
+    }
+    if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'a') {
+      // First press selects the block's text (the browser's own select all);
+      // once all of it is selected, or there is no text, the next one selects
+      // every block.
+      const el = blockRefs.current[id];
+      const range = el?.isContentEditable ? getSelectionOffsets(el) : null;
+      const textSelected = !el?.isContentEditable
+        || (el.textContent ?? '') === ''
+        || (range !== null && range.start === 0 && range.end === (el.textContent ?? '').length);
+      if (textSelected) {
+        e.preventDefault();
+        selection.selectAll();
+      }
+      return;
     }
     if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd') {
       // Also keeps the browser from bookmarking the page.
@@ -1157,6 +1311,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           setBlocks(prev => prev.map(b => b.id === id ? { ...b, parent_id: newParentId } : b));
           // Reposition: just after newPrev on its level.
           const newPosition = (newPrev.position) + 500;
+          recordUpdate(id, { parent_id: newParentId, position: newPosition });
           setBlocks(prev => prev.map(b => b.id === id ? { ...b, position: newPosition } : b));
           if (!id.startsWith('temp-')) {
             updaterRef.current?.debounced(id, { parent_id: newParentId, position: newPosition });
@@ -1170,6 +1325,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           // Position at the end of the new parent's children.
           const siblings = blocks.filter(b => b.parent_id === newParentId);
           const newPosition = (siblings.length > 0 ? Math.max(...siblings.map(s => s.position)) : 0) + 1000;
+          recordUpdate(id, { parent_id: newParentId, position: newPosition });
           setBlocks(prev => prev.map(b => b.id === id ? { ...b, position: newPosition } : b));
           // Auto-expand the parent if it's collapsed so the user sees the
           // newly nested block.
@@ -1382,6 +1538,9 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     if (created) {
       const swapped = created;
       finalId = swapped.id;
+      history.noteSwap(oldId, swapped.id);
+      history.record([{ op: 'create', block: swapped }]);
+      history.rebase(swapped.id, swapped.content);
       setBlocks(prev => prev.map(b => b.id === oldId ? swapped : b));
       if (blockRefs.current[oldId]) {
         blockRefs.current[swapped.id] = blockRefs.current[oldId];
@@ -1389,6 +1548,17 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       }
       rekeyUpload(oldId, swapped.id);
     } else {
+      if (job.revert) {
+        // Undo gives back what the block was; the "/image" command text is not part of that.
+        const before = job.revert.content.startsWith('/') ? '' : job.revert.content;
+        history.record([{
+          op: 'update',
+          id: finalId,
+          before: { type: job.revert.type, content: before, language: job.revert.language },
+          after: { type: job.kind, content, language },
+        }]);
+      }
+      history.rebase(finalId, content);
       setBlocks(prev => prev.map(b => b.id === finalId ? { ...b, type: job.kind, content, language } : b));
     }
 
@@ -1543,6 +1713,23 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     void createBlock(anchor ? anchor.id : null, 'image', url, parentId, '', positionBetween(prevPosition, next?.position));
   };
 
+  // History entry for a conversion made from the slash menu. The "/query" the
+  // user typed is not part of what undo brings back: it returns the text the
+  // block had when it got focus.
+  const recordSlash = (id: string, patch: BlockPatch) => {
+    const block = blocksRef.current.find(b => b.id === id);
+    if (!block) return;
+    const typed = history.baselineContent(id) ?? block.content;
+    const update = makeUpdate(block, patch);
+    // Not an edit of its own: its text is part of the entry below.
+    history.rebase(id, block.content);
+    if (update) {
+      if ('content' in update.before) update.before.content = typed.startsWith('/') ? '' : typed;
+      history.record([update]);
+    }
+    history.rebase(id, patch.content ?? block.content);
+  };
+
   const handleSlashSelect = async (type: BType) => {
     if (!slashMenu.blockId) return;
     const id = slashMenu.blockId;
@@ -1560,6 +1747,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         const newPage = await createPage(pageId);
         await refreshPages();
         const newContent = newPage.id;
+        recordSlash(id, { type: 'subpage', content: newContent });
         setBlocks(prev => prev.map(b => b.id === id ? { ...b, type: 'subpage', content: newContent } : b));
         if (!id.startsWith('temp-')) {
           updaterRef.current?.debounced(id, { type: 'subpage', content: newContent });
@@ -1576,6 +1764,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
         rows: [['', '', ''], ['', '', ''], ['', '', '']],
       };
       const newContent = JSON.stringify(defaultTable);
+      recordSlash(id, { type: 'table', content: newContent });
       setBlocks(prev => prev.map(b => b.id === id ? { ...b, type: 'table', content: newContent } : b));
       if (!id.startsWith('temp-')) {
         updaterRef.current?.debounced(id, { type: 'table', content: newContent });
@@ -1591,15 +1780,21 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       // 1. Convert the current block into the toggle "parent". We persist
       //    'paragraph' (no dedicated 'toggle' type in the backend); rendering
       //    treats both the same.
+      // The conversion and the child created below are one undo step.
+      const creating = history.group(() => {
+        recordSlash(id, { type: 'paragraph', content: '' });
+        // 2. Create the empty child with parent_id pointing at the parent.
+        return createBlock(id, 'paragraph', '', id);
+      });
       setBlocks(prev => prev.map(b => b.id === id ? { ...b, type: 'paragraph', content: '' } : b));
       if (!id.startsWith('temp-')) {
         updaterRef.current?.debounced(id, { type: 'paragraph', content: '' });
       }
-      // 2. Create the empty child with parent_id pointing at the parent.
-      await createBlock(id, 'paragraph', '', id);
+      await creating;
       return;
     }
 
+    recordSlash(id, { type, content: '' });
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, type, content: '' } : b));
     if (!id.startsWith('temp-')) {
       updaterRef.current?.debounced(id, { type, content: '' });
@@ -1641,6 +1836,10 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
   // The drop indicator (top/middle/bottom) lives in state because CSS classes
   // paint it.
   const draggingIdRef = useRef<string | null>(null);
+  // Dragging the handle of a selected block carries the whole selection: its
+  // roots, and every id inside them (which are not valid drop targets).
+  const dragRootsRef = useRef<string[] | null>(null);
+  const dragInsideRef = useRef<Set<string> | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'top' | 'middle' | 'bottom' } | null>(null);
 
   // Compute drop zone based on cursor Y relative to the target block.
@@ -1692,6 +1891,9 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
   const handleBlockDragStart = useCallback((id: string, e: React.DragEvent) => {
     draggingIdRef.current = id;
+    const roots = selection.dragRoots(id);
+    dragRootsRef.current = roots;
+    dragInsideRef.current = roots ? new Set(withSubtrees(blocksRef.current, roots)) : null;
     // dataTransfer is required in Firefox for drop to fire.
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
@@ -1701,11 +1903,14 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
   const handleBlockDragEnd = useCallback((_id: string) => {
     draggingIdRef.current = null;
+    dragRootsRef.current = null;
+    dragInsideRef.current = null;
     setDropTarget(null);
   }, []);
 
   const handleBlockDragOver = useCallback((id: string, e: React.DragEvent) => {
     if (!draggingIdRef.current || draggingIdRef.current === id) return;
+    if (dragInsideRef.current?.has(id)) return;
     e.preventDefault();
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move';
@@ -1767,13 +1972,21 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     }
 
     const sourceId = draggingIdRef.current || e.dataTransfer?.getData('text/plain') || null;
+    const selectedRoots = dragRootsRef.current;
     draggingIdRef.current = null;
+    dragRootsRef.current = null;
+    dragInsideRef.current = null;
     setDropTarget(null);
     if (!sourceId || sourceId === targetId) return;
 
     const pos = computeDropPosition(targetId, e.clientY);
+    if (selectedRoots) {
+      selection.dropSelection(selectedRoots, targetId, pos);
+      return;
+    }
     const computed = computeDrop(blocks, sourceId, targetId, pos);
     if (!computed) return;
+    recordUpdate(sourceId, { parent_id: computed.newParentId, position: computed.newPosition });
 
     setBlocks(prev => {
       const target = prev.find(b => b.id === targetId)!;
@@ -1846,10 +2059,14 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     () => flattenForRender(blocks, { hiddenAncestors: new Set() }),
     [blocks]
   );
+  visibleIdsRef.current = flatRender.map(({ block }) => block.id);
 
   return (
     <div
+      ref={editorRef}
       className={`block-editor ${isFileDrag ? 'block-editor--file-drag' : ''}`}
+      onFocus={history.onFocus}
+      onBlur={history.onBlur}
       onDrop={handleEditorDrop}
       onDragEnter={handleEditorDragEnter}
       onDragLeave={handleEditorDragLeave}
@@ -1907,6 +2124,8 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
           onDelete={deleteBlock}
           onTransform={handleTransform}
           onDuplicate={duplicateBlock}
+          selected={selection.selectedIds.has(block.id)}
+          onSelectionMenu={selection.openMenu}
           onPaste={handleBlockPaste}
           upload={uploads.get(block.id)}
           fileSize={block.type === 'file' ? uploadedSizes[block.content] : undefined}
@@ -1936,6 +2155,20 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       )}
 
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      {selection.band && (
+        <div
+          className="block-selection-rect"
+          aria-hidden="true"
+          style={{
+            left: selection.band.left,
+            top: selection.band.top,
+            width: selection.band.right - selection.band.left,
+            height: selection.band.bottom - selection.band.top,
+          }}
+        />
+      )}
+      {selection.menu}
 
       <FormatToolbar
         onFormat={handleInlineFormat}

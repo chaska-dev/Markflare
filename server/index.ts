@@ -754,11 +754,14 @@ app.put('/api/blocks/:id', (req, res) => {
 // 8. DELETE /api/blocks/:id
 // Mirrors the Pages function: removing an image/file block also removes the
 // upload from disk, but only once no other block references the same id.
+// With ?keep_file=1 the upload stays (the editor's undo can bring the block
+// back); it is then cleaned up with its page, like any file tied to a page.
 app.delete('/api/blocks/:id', (req, res) => {
   const id = req.params.id;
   const block: any = db.prepare('SELECT type, content FROM blocks WHERE id = ?').get(id);
   db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
 
+  if (req.query.keep_file === '1') return res.json({ success: true });
   if (!block || (block.type !== 'image' && block.type !== 'file')) {
     return res.json({ success: true });
   }
