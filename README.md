@@ -45,6 +45,7 @@ and file uploads, and a bilingual interface (English / Spanish).
 | 8 | [Configuration](#configuration) | Environment variables |
 | 9 | [Model Context Protocol](#model-context-protocol-mcp) | AI assistant integration |
 | 10 | [Notes](#notes) | Design decisions worth knowing |
+| 11 | [Branching workflow](BRANCHING.md) | How the `dev`, `staging` and `main` branches work |
 
 ---
 
