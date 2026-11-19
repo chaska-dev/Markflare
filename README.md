@@ -12,8 +12,8 @@ A self-hosted, block-based note-taking workspace that runs entirely on **Cloudfl
 
 </div>
 
-Pages with nested subpages, to-do lists, code blocks, tables, public share links, image
-and file uploads, and a bilingual interface (English / Spanish).
+Pages with nested subpages, to-do lists, code blocks, tables, public share links, calendar
+events, image and file uploads, and a bilingual interface (English / Spanish).
 
 ---
 
@@ -26,6 +26,8 @@ and file uploads, and a bilingual interface (English / Spanish).
 - **Drag & drop** — move blocks around, nest them by dropping in the middle, and drop an
   image or document straight into the page to upload it.
 - **Public share links** — one click to publish a page (and its subpages) read-only.
+- **Calendar** — an events view with month and year navigation. An event is a date plus
+  optional start/end times (`HH:MM`); events without times are all-day.
 - **Markdown in and out** — import a `.md` file, export any page back to Markdown.
 - **File storage in R2** — uploads up to 25 MB, never stored in the database.
 - **MCP server** — connect AI assistants (Claude Desktop, Cursor, Zed) to your workspace.
@@ -72,7 +74,7 @@ You create three things, and they each have a job:
 | What | Cloudflare service | Job in plain language | Created in |
 |---|---|---|---|
 | The website | **Pages** | Serves the app and runs the API. It's the "web host". | [step 1.4](#14-create-the-pages-project) |
-| Your notes | **D1** | A SQLite database. Holds pages, blocks, and share links. | [step 1.2](#12-create-the-database-and-the-bucket) |
+| Your notes | **D1** | A SQLite database. Holds pages, blocks, share links, and events. | [step 1.2](#12-create-the-database-and-the-bucket) |
 | Your images | **R2** | Object storage, like a private folder of files. | [step 1.2](#12-create-the-database-and-the-bucket) |
 
 Two of them are "bindings": you create them separately, then tell Pages "this variable is
@@ -181,9 +183,10 @@ version that kept uploads in the database, in [File storage (R2)](#file-storage-
 
 #### 1.3. Create the tables
 
-Open `parasti-db` → **Console** tab. Paste each of the five blocks below and hit
+Open `parasti-db` → **Console** tab. Paste each of the six blocks below and hit
 **Execute**, in order. Then run the `ALTER TABLE` statements of
-[`0006_page_features.sql`](migrations/0006_page_features.sql) once (see
+[`0006_page_features.sql`](migrations/0006_page_features.sql) and
+[`0007_block_props.sql`](migrations/0007_block_props.sql) once (see
 [Database schema](#database-schema)).
 
 Every block uses `IF NOT EXISTS` throughout, so re-running any of them is safe. The full
@@ -293,6 +296,25 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_id ON api_tokens(id);
+```
+
+</details>
+
+<details>
+<summary><strong>Block 6</strong> — <code>0008_events.sql</code>: calendar events</summary>
+
+```sql
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT '',
+  event_date TEXT NOT NULL,
+  start_time TEXT,
+  end_time TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
 ```
 
 </details>
@@ -474,8 +496,12 @@ pnpm run dev:web      # frontend only
 | `pnpm run dev` | Express + Vite together |
 | `pnpm run build` | type-check and build to `dist/` |
 | `pnpm run db:migrate:all` | apply migrations to the local SQLite file |
+| `pnpm run db:migrate:local` | apply migrations to the local SQLite via `wrangler` |
 | `pnpm run db:migrate:prod` | apply migrations to the remote D1 |
+| `pnpm run preview` | serve the built `dist/` through `wrangler pages dev` |
+| `pnpm run deploy` | build and deploy `dist/` to Cloudflare Pages |
 | `pnpm run mcp` | start the MCP server |
+| `pnpm run mcp:token` | generate an API/MCP token from the CLI |
 | `pnpm run test:mcp` | run the MCP test suite |
 
 > **Upgrading from an older checkout?** Migration files are edited in place and tracked by
@@ -550,6 +576,7 @@ transaction. They are idempotent, so re-running is safe.
 | `0005_api_tokens.sql` | `api_tokens` — tokens for the MCP server and CLI integrations |
 | `0006_page_features.sql` | `pages.deleted_at` (Trash), `is_favorite`, `full_width`, `is_project`, `cover` + index |
 | `0007_block_props.sql` | `blocks.props` — JSON bag for per-block settings (image width / alignment / caption) |
+| `0008_events.sql` | `events` — calendar events: a wall-clock date plus optional `start_time`/`end_time` (`HH:MM`; NULL = all-day), no timezone column on purpose |
 
 > **`0006` is required before deploying this version.** The API now filters on
 > `pages.deleted_at`, so against a D1 that has not applied it every page request fails with
@@ -560,6 +587,11 @@ transaction. They are idempotent, so re-running is safe.
 >
 > The same goes for `0007`: block create/update queries now read and write `blocks.props`,
 > so run `pnpm run db:migrate:prod` before deploying.
+>
+> The same applies to `0008_events.sql`: the calendar reads and writes the `events` table,
+> so a D1 without it makes every events request fail with "no such table". Unlike `0006`
+> and `0007` it is a plain `CREATE TABLE IF NOT EXISTS`, so applying it by hand is safe to
+> re-run.
 
 To apply them to a remote D1 from a terminal:
 
@@ -567,7 +599,7 @@ To apply them to a remote D1 from a terminal:
 pnpm run db:migrate:prod     # wrangler d1 migrations apply parasti-db --remote
 ```
 
-To apply them by hand in the dashboard, use the five blocks in
+To apply them by hand in the dashboard, use the six blocks in
 [step 1.3](#13-create-the-tables).
 
 > **D1 caveat** — SQLite has no `ADD COLUMN IF NOT EXISTS`, and D1 has no `DROP COLUMN`.
@@ -616,6 +648,10 @@ Everything is mounted under `/api`. 🔒 routes need a bearer token from
 | POST | `/api/auth/token` | 🔒 | Create an API/MCP token |
 | DELETE | `/api/auth/tokens/:id` | 🔒 | Revoke a token |
 | GET | `/api/search` | 🔒 | Search pages and blocks |
+| GET | `/api/events` | 🔒 | List events, sorted by date (all-day first within a date); optional `?from=YYYY-MM-DD&to=YYYY-MM-DD` filters the range |
+| POST | `/api/events` | 🔒 | Create an event (`title`, `event_date`, optional `start_time`/`end_time` as `HH:MM`; empty or null times = all day) |
+| PUT | `/api/events/:id` | 🔒 | Update an event (404 if it doesn't exist) |
+| DELETE | `/api/events/:id` | 🔒 | Delete an event |
 
 `GET /api/files/:id` is unauthenticated on purpose: a shared page is viewable by anyone
 with the link, and its embedded images have to load the same way. The R2 bucket stays
