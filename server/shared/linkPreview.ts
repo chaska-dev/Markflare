@@ -21,7 +21,7 @@ export interface LinkPreview {
 export const PREVIEW_TIMEOUT_MS = 5000;
 export const PREVIEW_MAX_BYTES = 512 * 1024;
 export const PREVIEW_MAX_REDIRECTS = 3;
-export const PREVIEW_USER_AGENT = 'Markflare-LinkPreview/1.0';
+export const PREVIEW_USER_AGENT = 'Parasti-LinkPreview/1.0';
 
 // Limits of what ends up in the block's props (4096 characters in total, see
 // blockProps.ts), so a preview always fits next to the other props.

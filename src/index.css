@@ -1,58 +1,3 @@
-:root,
-[data-theme="dark"] {
-  --bg-primary: #191919;
-  --bg-secondary: #202020;
-  --bg-tertiary: #2f2f2f;
-  --bg-hover: #353535;
-  --bg-active: #2d2d2d;
-  --text-primary: #e8e8e8;
-  --text-secondary: #9b9b9b;
-  --text-tertiary: #5a5a5a;
-  --border-color: #2f2f2f;
-  --bg-code: #141417;
-  --bg-input: #121214;
-  --bg-elevated: #202020;
-  --accent: #F38020;
-  --accent-hover: #e0731a;
-  --danger: #eb5757;
-  --icon-color: #FFFFFF;
-  --icon-color-muted: rgba(255, 255, 255, 0.7);
-  --sidebar-active-pill: rgba(255, 255, 255, 0.08);
-  --placeholder-border: rgba(255, 255, 255, 0.14);
-  --placeholder-bg: rgba(255, 255, 255, 0.02);
-  --sidebar-width: 260px;
-  --topbar-height: 45px;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-mono: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace;
-}
-
-[data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f7f7f5;
-  --bg-tertiary: #efefec;
-  --bg-hover: #e8e8e5;
-  --bg-active: #e3e2de;
-  --text-primary: #202428;
-  --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
-  --border-color: #e5e5e2;
-  --bg-code: #f8f8f6;
-  --bg-input: #ffffff;
-  --bg-elevated: #ffffff;
-  --accent: #F38020;
-  --accent-hover: #e0731a;
-  --danger: #eb5757;
-  --icon-color: #111111;
-  --icon-color-muted: rgba(17, 17, 17, 0.7);
-  --sidebar-active-pill: rgba(0, 0, 0, 0.06);
-  --placeholder-border: rgba(0, 0, 0, 0.14);
-  --placeholder-bg: rgba(0, 0, 0, 0.015);
-  --sidebar-width: 260px;
-  --topbar-height: 45px;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-mono: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace;
-}
-
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -83,7 +28,7 @@ body {
 }
 
 ::selection {
-  background: rgba(35, 131, 226, 0.3);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .layout {
@@ -325,7 +270,7 @@ body {
   outline: 2px dashed var(--accent);
   outline-offset: 6px;
   border-radius: 6px;
-  background: rgba(243, 128, 32, 0.04);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
 .block-editor-drop-hint {
@@ -495,12 +440,12 @@ body {
 }
 .block-wrapper--drop-middle,
 .drop-middle {
-  background: rgba(243, 128, 32, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   border-radius: 4px;
 }
 [data-theme="light"] .block-wrapper--drop-middle,
 [data-theme="light"] .drop-middle {
-  background: rgba(243, 128, 32, 0.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 
@@ -852,7 +797,7 @@ body {
 }
 
 /* ============================================================
-   PREMIUM LOGIN SCREEN (MARKFLARE)
+   PREMIUM LOGIN SCREEN (PARASTI)
    ============================================================ */
 
 .login-container {
@@ -905,8 +850,8 @@ body {
   height: 600px;
   background: radial-gradient(
     circle,
-    rgba(243, 128, 32, 0.14) 0%,
-    rgba(243, 128, 32, 0.04) 45%,
+    color-mix(in srgb, var(--accent) 14%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 4%, transparent) 45%,
     transparent 70%
   );
   filter: blur(50px);
@@ -917,8 +862,8 @@ body {
 [data-theme="light"] .login-ambient-glow {
   background: radial-gradient(
     circle,
-    rgba(243, 128, 32, 0.18) 0%,
-    rgba(243, 128, 32, 0.05) 50%,
+    color-mix(in srgb, var(--accent) 18%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 5%, transparent) 50%,
     transparent 75%
   );
 }
@@ -971,8 +916,8 @@ body {
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
-  background: rgba(243, 128, 32, 0.1);
-  border: 1px solid rgba(243, 128, 32, 0.25);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
   padding: 2px 8px;
   border-radius: 12px;
   letter-spacing: 0.2px;
@@ -1041,7 +986,7 @@ body {
 
 .login-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(243, 128, 32, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .login-input::placeholder {
@@ -1079,12 +1024,12 @@ body {
   font-weight: 600;
   margin-top: 6px;
   transition: background 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 14px rgba(243, 128, 32, 0.35);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .login-btn:hover:not(:disabled) {
   background: var(--accent-hover);
-  box-shadow: 0 6px 18px rgba(243, 128, 32, 0.45);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .login-btn:disabled {
@@ -1257,7 +1202,7 @@ body {
 }
 .workspace-settings-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .workspace-settings-icons {
   display: grid;
@@ -1285,7 +1230,7 @@ body {
   transform: scale(0.94);
 }
 .workspace-settings-icon.active {
-  background: rgba(35, 131, 226, 0.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-color: var(--accent);
 }
 .workspace-settings-error {
@@ -1610,7 +1555,7 @@ body {
   gap: 8px;
   padding: 6px 10px;
   margin: 4px 0;
-  background: rgba(35, 131, 226, 0.06);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
   border: 1px solid var(--border-color);
   border-radius: 5px;
   color: var(--accent);
@@ -1623,12 +1568,12 @@ body {
   outline: none;
 }
 .block-subpage:hover {
-  background: rgba(35, 131, 226, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: var(--accent);
   color: var(--accent);
 }
 .block-subpage:focus-visible {
-  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .block-subpage-icon {
   font-size: 16px;
@@ -3157,7 +3102,7 @@ pre.readonly-code {
 }
 
 /* ========================================================
-   MARKFLARE BRANDING & NAVIGATION OVERHAUL
+   PARASTI BRANDING & NAVIGATION OVERHAUL
    ======================================================== */
 
 .workspace-brand-text {
@@ -3173,7 +3118,7 @@ pre.readonly-code {
   font-weight: 800;
 }
 .brand-flare {
-  color: #F38020;
+  color: var(--accent);
   font-weight: 600;
   margin-left: 1px;
 }
@@ -3542,8 +3487,8 @@ button:hover .icon-document,
 }
 
 .page-cover-placeholder:hover {
-  border-color: #F38020;
-  background: rgba(243, 128, 32, 0.04);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
 .cover-placeholder-content {
@@ -3569,7 +3514,7 @@ button:hover .icon-document,
 }
 
 .page-cover-placeholder:hover .cover-placeholder-title {
-  color: #F38020;
+  color: var(--accent);
 }
 
 .cover-placeholder-desc {
@@ -3588,9 +3533,9 @@ button:hover .icon-document,
 }
 
 .cover-px-badge {
-  background: rgba(243, 128, 32, 0.15);
-  color: #F38020;
-  border: 1px solid rgba(243, 128, 32, 0.3);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 11.5px;
@@ -3636,8 +3581,8 @@ button:hover .icon-document,
 
 .hover-btn-px-tag {
   font-size: 10.5px;
-  color: #F38020;
-  background: rgba(243, 128, 32, 0.12);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   padding: 1px 6px;
   border-radius: 4px;
   margin-left: 4px;
@@ -3705,9 +3650,9 @@ button:hover .icon-document,
 
 /* Page Actions - Project Active Toggle */
 .page-action-btn--project-active {
-  color: #F38020 !important;
-  border-color: rgba(243, 128, 32, 0.4) !important;
-  background: rgba(243, 128, 32, 0.1) !important;
+  color: var(--accent) !important;
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+  background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
   font-weight: 500;
 }
 
@@ -3776,8 +3721,8 @@ button:hover .icon-document,
 
 /* Especificaciones destacadas de píxeles en el modal */
 .cover-picker-spec-banner {
-  background: linear-gradient(90deg, rgba(243, 128, 32, 0.12) 0%, rgba(243, 128, 32, 0.03) 100%);
-  border-bottom: 1px solid rgba(243, 128, 32, 0.2);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 12%, transparent) 0%, color-mix(in srgb, var(--accent) 3%, transparent) 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
   padding: 10px 18px;
   display: flex;
   flex-direction: column;
@@ -3791,7 +3736,7 @@ button:hover .icon-document,
 }
 
 .cover-spec-pill {
-  background: #F38020;
+  background: var(--accent);
   color: #fff;
   font-size: 11px;
   font-weight: 700;
@@ -3820,7 +3765,7 @@ button:hover .icon-document,
   background: var(--bg-primary);
   padding: 8px 12px;
   border-radius: 6px;
-  border-left: 3px solid #F38020;
+  border-left: 3px solid var(--accent);
   line-height: 1.45;
 }
 
@@ -3884,11 +3829,11 @@ button:hover .icon-document,
 }
 
 .cover-picker-input:focus {
-  border-color: #F38020;
+  border-color: var(--accent);
 }
 
 .cover-picker-submit-btn {
-  background: #F38020;
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -4078,8 +4023,8 @@ button:hover .icon-document,
 }
 
 [data-theme="light"] .page-cover-placeholder:hover {
-  border-color: #F38020;
-  background: rgba(243, 128, 32, 0.04);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
 [data-theme="light"] .cover-ratio-badge {
@@ -4943,7 +4888,7 @@ svg {
 }
 
 .outline-tooltip-badge--h1 {
-  background: rgba(243, 128, 32, 0.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
 }
 
@@ -4972,7 +4917,7 @@ svg {
 }
 
 /* ============================================================
-   EDIT LINK POPOVER / POP UP (MARKFLARE-STYLE)
+   EDIT LINK POPOVER / POP UP (PARASTI-STYLE)
    ============================================================ */
 
 @keyframes popoverFadeIn {
@@ -5306,18 +5251,18 @@ svg {
 
 .import-dropzone:hover,
 .import-dropzone:focus-visible {
-  border-color: var(--accent, #f38020);
-  background: var(--bg-hover, rgba(243, 128, 32, 0.05));
+  border-color: var(--accent, var(--accent));
+  background: var(--bg-hover, color-mix(in srgb, var(--accent) 5%, transparent));
 }
 
 .import-dropzone--active {
-  border-color: var(--accent, #f38020);
-  background: rgba(243, 128, 32, 0.10);
+  border-color: var(--accent, var(--accent));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   transform: scale(1.01);
 }
 
 .import-dropzone-icon {
-  color: var(--accent, #f38020);
+  color: var(--accent, var(--accent));
   margin-bottom: 4px;
   display: flex;
   align-items: center;
@@ -5338,7 +5283,7 @@ svg {
 }
 
 .import-dropzone-link {
-  color: var(--accent, #f38020);
+  color: var(--accent, var(--accent));
   text-decoration: underline;
   text-underline-offset: 2px;
   font-weight: 500;
@@ -5449,8 +5394,8 @@ svg {
 }
 
 .import-parent-option--selected {
-  border-color: var(--accent, #f38020);
-  background: rgba(243, 128, 32, 0.08);
+  border-color: var(--accent, var(--accent));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .import-parent-option input[type="radio"] {
@@ -5473,7 +5418,7 @@ svg {
 }
 
 .import-parent-option--selected .import-parent-radio {
-  border-color: var(--accent, #f38020);
+  border-color: var(--accent, var(--accent));
 }
 
 .import-parent-option--selected .import-parent-radio::after {
@@ -5481,7 +5426,7 @@ svg {
   position: absolute;
   inset: 3px;
   border-radius: 50%;
-  background: var(--accent, #f38020);
+  background: var(--accent, var(--accent));
 }
 
 .import-parent-option-text {
@@ -5527,7 +5472,7 @@ svg {
 }
 
 .import-parent-search-input:focus {
-  border-color: var(--accent, #f38020);
+  border-color: var(--accent, var(--accent));
   background: var(--bg-primary, #19191d);
 }
 
@@ -5580,12 +5525,12 @@ svg {
 }
 
 .import-parent-row--selected {
-  background: rgba(243, 128, 32, 0.10);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--text-primary, #e8e8ea);
 }
 
 .import-parent-row--selected:hover {
-  background: rgba(243, 128, 32, 0.14);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .import-parent-row-input {
@@ -5626,7 +5571,7 @@ svg {
 }
 
 .import-parent-row-check {
-  color: var(--accent, #f38020);
+  color: var(--accent, var(--accent));
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -5675,7 +5620,7 @@ svg {
 }
 
 .import-btn--primary {
-  background: var(--accent, #f38020);
+  background: var(--accent, var(--accent));
   color: #fff;
 }
 
@@ -5718,11 +5663,11 @@ svg {
 
 [data-theme="light"] .import-dropzone:hover,
 [data-theme="light"] .import-dropzone:focus-visible {
-  background: rgba(243, 128, 32, 0.06);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 [data-theme="light"] .import-dropzone--active {
-  background: rgba(243, 128, 32, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 [data-theme="light"] .import-file-chip,
@@ -5734,7 +5679,7 @@ svg {
 }
 
 [data-theme="light"] .import-parent-option--selected {
-  background: rgba(243, 128, 32, 0.10);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 [data-theme="light"] .import-parent-row:hover {
@@ -5742,7 +5687,7 @@ svg {
 }
 
 [data-theme="light"] .import-parent-row--selected {
-  background: rgba(243, 128, 32, 0.14);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 [data-theme="light"] .import-parent-search-input:focus {

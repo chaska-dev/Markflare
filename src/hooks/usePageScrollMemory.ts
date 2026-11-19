@@ -1,6 +1,6 @@
 import { RefObject, useEffect, useLayoutEffect, useRef } from 'react';
 
-const STORAGE_PREFIX = 'markflare:scroll:';
+const STORAGE_PREFIX = 'parasti:scroll:';
 
 // In-memory map is the source of truth; sessionStorage only survives reloads.
 const positions = new Map<string, number>();

@@ -634,8 +634,7 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
                 <Logo size={20} variant="icon" />
               )}
               <div className="workspace-brand-text">
-                <span className="brand-mark">mark</span>
-                <span className="brand-flare">flare</span>
+                <Logo size={54} variant="word" />
               </div>
             </div>
           )}

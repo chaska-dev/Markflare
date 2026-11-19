@@ -156,7 +156,7 @@ function figma(url: URL): EmbedInfo | null {
   return {
     provider: 'figma',
     title: 'Figma',
-    src: `https://www.figma.com/embed?embed_host=markflare&url=${encodeURIComponent(original)}`,
+    src: `https://www.figma.com/embed?embed_host=parasti&url=${encodeURIComponent(original)}`,
     aspectRatio: '16 / 9',
     sandbox: SANDBOX,
     allow: 'fullscreen',

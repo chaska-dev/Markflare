@@ -109,7 +109,7 @@ export interface Block {
   language: string;
   position: number;
   // parent_id: id del bloque padre dentro de la misma página, o null.
-  // Lo usamos para armar el árbol jerárquico del editor (markflare-style).
+  // Lo usamos para armar el árbol jerárquico del editor (parasti-style).
   parent_id: string | null;
   // collapsed: estado del chevron. true = hijos ocultos.
   collapsed: boolean;

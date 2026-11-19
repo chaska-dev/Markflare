@@ -8,10 +8,10 @@ import * as path from 'node:path';
 // Read config from env or .dev.vars
 function getEnvConfig() {
   const env = process.env;
-  let url = env.MARKFLARE_URL || 'http://localhost:3000';
-  let apiToken = env.MARKFLARE_API_TOKEN || env.MARKFLARE_TOKEN;
-  let username = env.MARKFLARE_USERNAME || env.AUTH_USERNAME;
-  let password = env.MARKFLARE_PASSWORD || env.AUTH_PASSWORD;
+  let url = env.PARASTI_URL || 'http://localhost:3000';
+  let apiToken = env.PARASTI_API_TOKEN || env.PARASTI_TOKEN;
+  let username = env.PARASTI_USERNAME || env.AUTH_USERNAME;
+  let password = env.PARASTI_PASSWORD || env.AUTH_PASSWORD;
 
   if (!apiToken && (!username || !password)) {
     const searchPaths = [
@@ -33,10 +33,10 @@ function getEnvConfig() {
           if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
             v = v.slice(1, -1);
           }
-          if (k === 'MARKFLARE_API_TOKEN' && !apiToken) apiToken = v;
+          if (k === 'PARASTI_API_TOKEN' && !apiToken) apiToken = v;
           if (k === 'AUTH_USERNAME' && !username) username = v;
           if (k === 'AUTH_PASSWORD' && !password) password = v;
-          if (k === 'MARKFLARE_URL' && env.MARKFLARE_URL === undefined) url = v;
+          if (k === 'PARASTI_URL' && env.PARASTI_URL === undefined) url = v;
         }
       }
     }
@@ -75,7 +75,7 @@ async function getAuthToken(): Promise<string> {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Markflare authentication failed (${res.status}): ${errText}`);
+    throw new Error(`Parasti authentication failed (${res.status}): ${errText}`);
   }
 
   const data = (await res.json()) as { token: string; expiresAt?: number };
@@ -110,7 +110,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Markflare API error [${res.status}] ${endpoint}: ${text}`);
+    throw new Error(`Parasti API error [${res.status}] ${endpoint}: ${text}`);
   }
 
   return (await res.json()) as T;
@@ -118,14 +118,14 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
 // Create MCP server instance
 const server = new McpServer({
-  name: 'markflare-mcp',
+  name: 'parasti-mcp',
   version: '1.0.0',
 });
 
 // Tool: import_markdown
 server.tool(
   'import_markdown',
-  'Import raw Markdown content into Markflare as a new page with parsed blocks.',
+  'Import raw Markdown content into Parasti as a new page with parsed blocks.',
   {
     markdown: z.string().describe('The markdown content to import'),
     title: z.string().optional().describe('Optional title for the page. If omitted, will be extracted from the first # H1 header or titled "Untitled"'),
@@ -147,7 +147,7 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: `Successfully created page "${page.title}" (ID: ${page.id}) in Markflare with ${page.blocks?.length || 0} blocks.\nView at: ${config.url}/page/${page.id}`,
+            text: `Successfully created page "${page.title}" (ID: ${page.id}) in Parasti with ${page.blocks?.length || 0} blocks.\nView at: ${config.url}/page/${page.id}`,
           },
         ],
       };
@@ -163,7 +163,7 @@ server.tool(
 // Tool: import_markdown_file
 server.tool(
   'import_markdown_file',
-  'Read a local .md file and import it into Markflare as a new page.',
+  'Read a local .md file and import it into Parasti as a new page.',
   {
     filePath: z.string().describe('Absolute or relative path to the .md file'),
     title: z.string().optional().describe('Optional title for the page. If omitted, uses the filename without extension or first header.'),
@@ -212,7 +212,7 @@ server.tool(
 // Tool: list_pages
 server.tool(
   'list_pages',
-  'List all pages in Markflare workspace to inspect the hierarchy and obtain page IDs.',
+  'List all pages in Parasti workspace to inspect the hierarchy and obtain page IDs.',
   {},
   async () => {
     try {
@@ -250,7 +250,7 @@ server.tool(
 // Tool: search_pages
 server.tool(
   'search_pages',
-  'Search for pages or block contents in Markflare.',
+  'Search for pages or block contents in Parasti.',
   {
     query: z.string().describe('Search query string'),
   },
@@ -316,10 +316,10 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[markflare-mcp] Server running on stdio');
+  console.error('[parasti-mcp] Server running on stdio');
 }
 
 main().catch((err) => {
-  console.error('[markflare-mcp] Fatal error:', err);
+  console.error('[parasti-mcp] Fatal error:', err);
   process.exit(1);
 });

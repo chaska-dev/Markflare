@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 // Helper to communicate with the MCP server over stdio
 async function runMcpSession() {
-  console.log('Starting Markflare MCP test suite...\n');
+  console.log('Starting Parasti MCP test suite...\n');
 
   const child = spawn('npx.cmd', ['tsx', 'mcp/index.ts'], {
     cwd: process.cwd(),
@@ -68,9 +68,9 @@ async function runMcpSession() {
 
   // 3. import_markdown with rich content
   console.log('\n[3/6] Creating rich page with H1, H2, table, code, tasks, and quotes...');
-  const richMarkdown = `# Markflare Architecture Guide
+  const richMarkdown = `# Parasti Architecture Guide
 
-> Markflare is a self-hosted, block-based open-source note-taking workspace.
+> Parasti is a self-hosted, block-based open-source note-taking workspace.
 
 ---
 
@@ -95,7 +95,7 @@ Overview of implemented capabilities:
 
 \`\`\`typescript
 export function welcome(user: string) {
-  console.log(\`Welcome to Markflare, \${user}!\`);
+  console.log(\`Welcome to Parasti, \${user}!\`);
 }
 \`\`\`
 
@@ -107,7 +107,7 @@ $$f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi
   const importRes = await sendRequest('tools/call', {
     name: 'import_markdown',
     arguments: {
-      title: 'Markflare Architecture Guide',
+      title: 'Parasti Architecture Guide',
       markdown: richMarkdown,
     },
   });
@@ -131,7 +131,7 @@ This is a **subpage** created from a local \`.md\` file on disk.
 ### Components:
 1. **StdioServerTransport**: Bidirectional communication via JSON-RPC 2.0.
 2. **Auto-authentication**: Automatic bearer token exchange and renewal.
-3. **Shared Parser**: Deterministic Markdown conversion to Markflare blocks.
+3. **Shared Parser**: Deterministic Markdown conversion to Parasti blocks.
 `,
       'utf8'
     );

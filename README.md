@@ -1,6 +1,9 @@
 <div align="center">
-  <img src="public/logo.svg" alt="Markflare logo" width="220" />
-  <h1>Markflare</h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo-word-cream.svg" />
+    <img src="public/logo-color.svg" alt="Parasti logo" width="220" />
+  </picture>
+  <h1>Parasti</h1>
 </div>
 
 <div align="center">
@@ -84,7 +87,7 @@ that database". The names are fixed and the code expects them:
 ## Deploy
 
 Three methods. All of them end up with the same thing running on
-`https://markflare.pages.dev`.
+`https://parasti.pages.dev`.
 
 | | **1. Dashboard** ⭐ | **2. Local** | **3. Terminal** |
 |---|---|---|---|
@@ -117,8 +120,8 @@ Pick whichever fits you:
 **Variant A — build it yourself, upload the folder**
 
 ```bash
-git clone https://github.com/<your-user>/markflare.git
-cd markflare
+git clone https://github.com/<your-user>/parasti.git
+cd parasti
 pnpm install
 pnpm run build
 ```
@@ -133,13 +136,13 @@ Push the repo to GitHub, then in the next step choose **Connect to Git** instead
 locally again.
 
 ```bash
-git remote add origin https://github.com/<your-user>/markflare.git
+git remote add origin https://github.com/<your-user>/parasti.git
 git push -u origin main
 ```
 
 #### 1.2. Create the database and the bucket
 
-Markflare needs two storage pieces before it can run. Create both now — neither one
+Parasti needs two storage pieces before it can run. Create both now — neither one
 existed until a few minutes ago, and both have to exist before the app works.
 
 **The database (D1) — this is where your notes live.**
@@ -149,7 +152,7 @@ why a D1 row tops out at 2 MB — relevant in a moment.
 
 **Workers & Pages → D1 SQL databases → Create database**
 
-- Name: `markflare-db`
+- Name: `parasti-db`
 
 **The file bucket (R2) — this is where your images and attachments live.**
 
@@ -160,7 +163,7 @@ keeps the database for text, which is what a database is good at.
 
 **R2 → Overview → Create bucket**
 
-- Bucket name: `markflare-files`
+- Bucket name: `parasti-files`
 
 R2 will ask you to add a card on the free plan the first time — the free tier gives you
 10 GB of storage, 1M writes and 10M reads a month, with no charge for bandwidth, which is
@@ -170,14 +173,14 @@ far more than a personal workspace uses.
 > through the app, and a public bucket would expose them directly, bypassing it.
 >
 > The name doesn't actually matter, as long as you bind it as `BUCKET` in step 1.5.
-> `markflare-files` is just the default so these steps are copy-pasteable.
+> `parasti-files` is just the default so these steps are copy-pasteable.
 
 More on why this is split across two services, and what to do if you're upgrading from a
 version that kept uploads in the database, in [File storage (R2)](#file-storage-r2).
 
 #### 1.3. Create the tables
 
-Open `markflare-db` → **Console** tab. Paste each of the five blocks below and hit
+Open `parasti-db` → **Console** tab. Paste each of the five blocks below and hit
 **Execute**, in order. Then run the `ALTER TABLE` statements of
 [`0006_page_features.sql`](migrations/0006_page_features.sql) once (see
 [Database schema](#database-schema)).
@@ -297,10 +300,10 @@ CREATE INDEX IF NOT EXISTS idx_api_tokens_id ON api_tokens(id);
 
 **Workers & Pages → Create application → Pages**
 
-- **Upload assets** (Variant A): project name `markflare`, production branch `main`, then
+- **Upload assets** (Variant A): project name `parasti`, production branch `main`, then
   drag your `dist/` folder onto the upload area.
-- **Connect to Git** (Variant B): pick your GitHub account and the `markflare` repo,
-  project name `markflare`, production branch `main`.
+- **Connect to Git** (Variant B): pick your GitHub account and the `parasti` repo,
+  project name `parasti`, production branch `main`.
 
 If you chose **Connect to Git**, set these on the build configuration screen — they are
 not filled in for you:
@@ -319,10 +322,10 @@ In **Settings → Functions**:
 - **Compatibility date** → `2024-09-01`
 - **D1 database bindings → Add**:
   - Variable name: `DB`
-  - D1 database: `markflare-db`
+  - D1 database: `parasti-db`
 - **R2 bucket bindings → Add**:
   - Variable name: `BUCKET`
-  - R2 bucket: `markflare-files`
+  - R2 bucket: `parasti-files`
 
 In **Settings → Variables and secrets → Add** (use the **Encrypt** type, not Plaintext):
 
@@ -344,7 +347,7 @@ openssl rand -hex 32
 
 #### 1.6. Done
 
-Your site is live at `https://markflare.pages.dev`. Sign in with the `AUTH_USERNAME` and
+Your site is live at `https://parasti.pages.dev`. Sign in with the `AUTH_USERNAME` and
 `AUTH_PASSWORD` you just set.
 
 **Custom domain (optional):** **Custom domains → Set up a custom domain** and follow the
@@ -354,15 +357,15 @@ prompts. Cloudflare issues the certificate automatically.
 
 ### 2. Local only (no deploy)
 
-Use this to work on Markflare without putting anything on the internet. There is no Cloudflare
+Use this to work on Parasti without putting anything on the internet. There is no Cloudflare
 project, no D1, and no R2 — the local server uses a SQLite file and a folder on disk.
 
 ```bash
-git clone https://github.com/<your-user>/markflare.git
-cd markflare
+git clone https://github.com/<your-user>/parasti.git
+cd parasti
 pnpm install
 cp .env.example .dev.vars      # set AUTH_USERNAME, AUTH_PASSWORD, AUTH_SECRET
-pnpm run db:migrate:all        # creates data/markflare.db with the schema
+pnpm run db:migrate:all        # creates data/parasti.db with the schema
 pnpm run dev                   # Express on :3000 + Vite on :5173
 ```
 
@@ -381,8 +384,8 @@ doesn't ship one.
 #### 3.1. Build
 
 ```bash
-git clone https://github.com/<your-user>/markflare.git
-cd markflare
+git clone https://github.com/<your-user>/parasti.git
+cd parasti
 pnpm install
 pnpm run build
 ```
@@ -393,9 +396,9 @@ Same two storage pieces as [step 1.2](#12-create-the-database-and-the-bucket) �
 still get created from the dashboard, since neither can be created from the CLI.
 
 **The database (D1)** — **Workers & Pages → D1 SQL databases → Create database**, named
-`markflare-db`. Open it and copy the **Database ID** (a UUID) — you need it in step 3.3.
+`parasti-db`. Open it and copy the **Database ID** (a UUID) — you need it in step 3.3.
 
-**The file bucket (R2)** — **R2 → Overview → Create bucket**, named `markflare-files`.
+**The file bucket (R2)** — **R2 → Overview → Create bucket**, named `parasti-files`.
 Leave it private; there's no reason to expose it here either.
 
 #### 3.3. Create a local `wrangler.toml`
@@ -403,18 +406,18 @@ Leave it private; there's no reason to expose it here either.
 In the project root:
 
 ```toml
-name = "markflare"
+name = "parasti"
 compatibility_date = "2024-09-01"
 pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "markflare-db"
+database_name = "parasti-db"
 database_id = "PASTE-YOUR-D1-UUID-HERE"   # ← the UUID from step 3.2
 
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "markflare-files"
+bucket_name = "parasti-files"
 ```
 
 **Don't commit this file** — it contains your project-specific D1 UUID. It's already in
@@ -426,7 +429,7 @@ bucket_name = "markflare-files"
 pnpm run db:migrate:prod
 ```
 
-That runs `wrangler d1 migrations apply markflare-db --remote`, which reads every file in
+That runs `wrangler d1 migrations apply parasti-db --remote`, which reads every file in
 `migrations/` in order and applies them in a single batch.
 
 #### 3.5. Deploy
@@ -451,11 +454,11 @@ type): `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_SECRET`.
 ## Run locally
 
 The local stack mirrors production closely enough that you rarely need Cloudflare to work
-on Markflare.
+on Parasti.
 
 | Piece | Production | Local |
 |---|---|---|
-| Database | D1 | SQLite at `data/markflare.db` |
+| Database | D1 | SQLite at `data/parasti.db` |
 | Uploads | R2 bucket | `uploads/` on disk |
 | API | Pages Function | Express on `:3000` |
 
@@ -560,7 +563,7 @@ transaction. They are idempotent, so re-running is safe.
 To apply them to a remote D1 from a terminal:
 
 ```bash
-pnpm run db:migrate:prod     # wrangler d1 migrations apply markflare-db --remote
+pnpm run db:migrate:prod     # wrangler d1 migrations apply parasti-db --remote
 ```
 
 To apply them by hand in the dashboard, use the five blocks in
@@ -633,7 +636,7 @@ cp .env.example .dev.vars
 | `AUTH_USERNAME` | yes | The single allowed username |
 | `AUTH_PASSWORD` | yes | The single allowed password — use a strong one |
 | `AUTH_SECRET` | yes | Long random string for signing bearer tokens. Generate with `openssl rand -hex 32`. Rotating it **invalidates every token issued so far**, which is what you want if one ever leaks. |
-| `markflare_DB_PATH` | no | Override the local SQLite path (default `./data/markflare.db`) |
+| `PARASTI_DB_PATH` | no | Override the local SQLite path (default `./data/parasti.db`) |
 
 **Local** — read from `.dev.vars` by both `wrangler pages dev` and the local Express server.
 
@@ -644,7 +647,7 @@ Cloudflare dashboard, under **Settings → Variables and secrets**.
 
 ## Model Context Protocol (MCP)
 
-Markflare ships an MCP server, so AI assistants can read and write your workspace.
+Parasti ships an MCP server, so AI assistants can read and write your workspace.
 Requires the `api_tokens` table ([block 5](#13-create-the-tables)).
 
 Generate a token from **Account & Settings → API / MCP Token** in the app, then:
@@ -690,6 +693,20 @@ Client configuration for Claude Desktop, Cursor and Zed is in
 
 ---
 
+## Credits
+
+Parasti is a fork of [Markflare](https://github.com/chaska-dev/Markflare) by
+[chaska-dev](https://github.com/chaska-dev) (Josue Espinoza), released under the
+MIT License. Credit for the original architecture, editor model, and Cloudflare
+deployment design belongs to the upstream project — Parasti rebrands it, then
+continues development on top of that base.
+
 ## License
 
-MIT.
+[MIT](LICENSE).
+
+- Markflare (upstream): Copyright (c) 2026 Josue Espinoza
+- Parasti (this fork): Copyright (c) 2026 rokifran
+
+The upstream copyright notice is retained in `LICENSE` as required by the MIT
+License; the notice covers both the original work and this fork's changes.

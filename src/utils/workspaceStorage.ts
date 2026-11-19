@@ -1,4 +1,4 @@
-// Local storage utilities for Markflare. Only per-device state lives here
+// Local storage utilities for Parasti. Only per-device state lives here
 // (recent pages); everything that should follow the user across devices is
 // stored with the page in the database.
 
@@ -10,14 +10,14 @@ export interface RecentPageItem {
 }
 
 const STORAGE_KEYS = {
-  RECENTS: 'markflare_recents',
-  PROJECTS: 'markflare_projects',
-  COVERS: 'markflare_covers',
+  RECENTS: 'parasti_recents',
+  PROJECTS: 'parasti_projects',
+  COVERS: 'parasti_covers',
 };
 
 // Custom events for cross-component reactivity.
 export const STORAGE_EVENTS = {
-  RECENTS_CHANGED: 'markflare:recents_changed',
+  RECENTS_CHANGED: 'parasti:recents_changed',
 };
 
 function dispatchChange(eventName: string) {

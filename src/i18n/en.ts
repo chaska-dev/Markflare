@@ -4,7 +4,7 @@
 // Use `t('key')` from the `useLanguage` hook in components.
 export const en = {
   // App
-  'app.name': 'Markflare',
+  'app.name': 'Parasti',
 
   // Sidebar
   'sidebar.workspace': 'Workspace',
@@ -317,7 +317,7 @@ export const en = {
   'apiToken.subtitle': 'Generate a dedicated token to connect AI assistants via MCP.',
   'apiToken.generate': 'Generate Token',
   'apiToken.generating': 'Generating...',
-  'apiToken.generatedNotice': 'Keep this token secret. It authenticates external tools and MCP servers to your Markflare workspace.',
+  'apiToken.generatedNotice': 'Keep this token secret. It authenticates external tools and MCP servers to your Parasti workspace.',
   'apiToken.copy': 'Copy Token',
   'apiToken.copied': 'Copied!',
   'apiToken.validity': 'Valid for 1 year',

@@ -89,7 +89,7 @@ function debounceWithFlush<T extends (...args: any[]) => any>(fn: T, ms: number)
 }
 
 // Tree helpers.
-// Blocks live in a flat list with `parent_id` (markflare-style). The tree to
+// Blocks live in a flat list with `parent_id` (parasti-style). The tree to
 // display is built once per render (buildRenderItems in utils/columns.ts).
 // `position` orders siblings under the same parent.
 
@@ -701,7 +701,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
 
     // Decide the current block's new type/content.
     // Special case: empty block + detectedTitle → promote to heading1 with the
-    // detected title (markflare-style: leading # becomes the page title).
+    // detected title (parasti-style: leading # becomes the page title).
     let newType: BType = first.type as BType;
     let newContent = first.content;
     if (currentContent === '' && detectedTitle) {
@@ -1362,7 +1362,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
       e.preventDefault();
       // El nuevo bloque hereda el parent_id del actual. Si el padre del actual
       // está collapsed, lo expandemos automáticamente para que el usuario vea
-      // el bloque que acaba de crear (markflare hace lo mismo).
+      // el bloque que acaba de crear (parasti hace lo mismo).
       const current = blocks[idx];
       createBlock(id, 'paragraph', '', current.parent_id);
       if (current.parent_id) {
@@ -1859,7 +1859,7 @@ export function BlockEditor({ pageId, initialBlocks }: Props) {
     }
 
     if (type === 'toggle') {
-      // markflare model: creating a toggle = parent (paragraph with chevron) +
+      // parasti model: creating a toggle = parent (paragraph with chevron) +
       // empty child. Cursor lands on the child so the user can type right away.
       setSlashMenu(prev => ({ ...prev, visible: false }));
       // 1. Convert the current block into the toggle "parent". We persist

@@ -1,5 +1,5 @@
 // Local SQLite + migration runner. Uses better-sqlite3 (sync API, prebuilt
-// Windows binaries). The DB file lives at data/markflare.db (gitignored).
+// Windows binaries). The DB file lives at data/parasti.db (gitignored).
 
 import Database from 'better-sqlite3';
 import * as fs from 'node:fs';
@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { parseBlockProps } from './shared/blockProps';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
-const DB_PATH = process.env.markflare_DB_PATH || path.join(DATA_DIR, 'markflare.db');
+const DB_PATH = process.env.PARASTI_DB_PATH || path.join(DATA_DIR, 'parasti.db');
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'migrations');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });

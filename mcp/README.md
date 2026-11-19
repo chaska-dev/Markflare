@@ -1,24 +1,24 @@
-# Markflare MCP Server
+# Parasti MCP Server
 
-Official [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server to connect Artificial Intelligence assistants (Claude Desktop, Cursor, Zed, Antigravity, etc.) directly to your **Markflare** workspace.
+Official [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server to connect Artificial Intelligence assistants (Claude Desktop, Cursor, Zed, Antigravity, etc.) directly to your **Parasti** workspace.
 
 It allows any LLM or AI agent to:
 - Create pages and import structured Markdown documents into pages and native blocks.
 - Upload local `.md` files directly from disk.
 - Query the workspace page hierarchy and retrieve page identifiers (`parentId`).
-- Search across existing pages and blocks in Markflare.
+- Search across existing pages and blocks in Parasti.
 - Inspect page details and ordered blocks by page ID.
 
 ---
 
 ## Authentication: Generating an API Token
 
-Markflare uses dedicated, long-lived API tokens for MCP integrations. This allows AI assistants to authenticate without requiring or exposing your account password.
+Parasti uses dedicated, long-lived API tokens for MCP integrations. This allows AI assistants to authenticate without requiring or exposing your account password.
 
 You can generate a token in two ways:
 
 1. **From the Web UI (Recommended)**:
-   - Open Markflare in your browser (`http://localhost:5173`).
+   - Open Parasti in your browser (`http://localhost:5173`).
    - Click on your user avatar at the bottom of the sidebar.
    - Select **API / MCP Token**.
    - Click **Generate Token** and copy either the token or the pre-formatted JSON snippet.
@@ -46,10 +46,10 @@ You can generate a token in two ways:
 
 | Variable | Description |
 |---|---|
-| `MARKFLARE_URL` | Base URL of your Markflare instance (e.g. `http://localhost:3000` or `https://your-app.pages.dev`). |
-| `MARKFLARE_API_TOKEN` | Dedicated API token generated from the UI or CLI (Recommended). |
-| `MARKFLARE_USERNAME` | Username fallback (if no token is provided). |
-| `MARKFLARE_PASSWORD` | Password fallback (if no token is provided). |
+| `PARASTI_URL` | Base URL of your Parasti instance (e.g. `http://localhost:3000` or `https://your-app.pages.dev`). |
+| `PARASTI_API_TOKEN` | Dedicated API token generated from the UI or CLI (Recommended). |
+| `PARASTI_USERNAME` | Username fallback (if no token is provided). |
+| `PARASTI_PASSWORD` | Password fallback (if no token is provided). |
 
 ---
 
@@ -64,12 +64,12 @@ Add the server definition to your configuration file:
 ```json
 {
   "mcpServers": {
-    "markflare": {
+    "parasti": {
       "command": "npx",
-      "args": ["-y", "tsx", "path/to/markflare/mcp/index.ts"],
+      "args": ["-y", "tsx", "path/to/parasti/mcp/index.ts"],
       "env": {
-        "MARKFLARE_URL": "http://localhost:3000",
-        "MARKFLARE_API_TOKEN": "YOUR_TOKEN_HERE"
+        "PARASTI_URL": "http://localhost:3000",
+        "PARASTI_API_TOKEN": "YOUR_TOKEN_HERE"
       }
     }
   }
@@ -84,12 +84,12 @@ Add to `.cursor/mcp.json` or your Cursor MCP settings:
 ```json
 {
   "mcpServers": {
-    "markflare": {
+    "parasti": {
       "command": "npx",
       "args": ["-y", "tsx", "mcp/index.ts"],
       "env": {
-        "MARKFLARE_URL": "http://localhost:3000",
-        "MARKFLARE_API_TOKEN": "YOUR_TOKEN_HERE"
+        "PARASTI_URL": "http://localhost:3000",
+        "PARASTI_API_TOKEN": "YOUR_TOKEN_HERE"
       }
     }
   }
@@ -103,7 +103,7 @@ Add to `.cursor/mcp.json` or your Cursor MCP settings:
 To verify all MCP tools against a running instance:
 
 ```bash
-# Ensure Markflare is running locally
+# Ensure Parasti is running locally
 pnpm run test:mcp
 ```
 

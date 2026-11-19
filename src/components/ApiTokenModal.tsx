@@ -170,12 +170,12 @@ export function ApiTokenModal({ open, onClose }: Props) {
         return JSON.stringify(
           {
             mcpServers: {
-              markflare: {
+              parasti: {
                 command: 'npx',
                 args: ['-y', 'tsx', 'mcp/index.ts'],
                 env: {
-                  MARKFLARE_URL: backendUrl,
-                  MARKFLARE_API_TOKEN: currentToken,
+                  PARASTI_URL: backendUrl,
+                  PARASTI_API_TOKEN: currentToken,
                 },
               },
             },
@@ -188,12 +188,12 @@ export function ApiTokenModal({ open, onClose }: Props) {
         return JSON.stringify(
           {
             mcpServers: {
-              markflare: {
+              parasti: {
                 command: 'npx',
-                args: ['-y', 'tsx', 'path/to/markflare/mcp/index.ts'],
+                args: ['-y', 'tsx', 'path/to/parasti/mcp/index.ts'],
                 env: {
-                  MARKFLARE_URL: backendUrl,
-                  MARKFLARE_API_TOKEN: currentToken,
+                  PARASTI_URL: backendUrl,
+                  PARASTI_API_TOKEN: currentToken,
                 },
               },
             },
@@ -203,18 +203,18 @@ export function ApiTokenModal({ open, onClose }: Props) {
         );
 
       case 'claude_code':
-        return `claude mcp add markflare npx -y tsx mcp/index.ts --env MARKFLARE_URL="${backendUrl}" --env MARKFLARE_API_TOKEN="${currentToken}"`;
+        return `claude mcp add parasti npx -y tsx mcp/index.ts --env PARASTI_URL="${backendUrl}" --env PARASTI_API_TOKEN="${currentToken}"`;
 
       case 'antigravity':
         return JSON.stringify(
           {
             mcpServers: {
-              markflare: {
+              parasti: {
                 command: 'npx',
                 args: ['-y', 'tsx', 'mcp/index.ts'],
                 env: {
-                  MARKFLARE_URL: backendUrl,
-                  MARKFLARE_API_TOKEN: currentToken,
+                  PARASTI_URL: backendUrl,
+                  PARASTI_API_TOKEN: currentToken,
                 },
               },
             },
@@ -224,7 +224,7 @@ export function ApiTokenModal({ open, onClose }: Props) {
         );
 
       case 'env':
-        return `MARKFLARE_URL="${backendUrl}"\nMARKFLARE_API_TOKEN="${currentToken}"`;
+        return `PARASTI_URL="${backendUrl}"\nPARASTI_API_TOKEN="${currentToken}"`;
 
       default:
         return '';

@@ -5,7 +5,7 @@ import { en } from './en';
 
 export const es: Record<TranslationKey, string> = {
   // App
-  'app.name': 'Markflare',
+  'app.name': 'Parasti',
 
   // Sidebar
   'sidebar.workspace': 'Workspace',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +26,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,16 +68,28 @@ export function Login() {
       >
         <motion.div
           className="login-icon-wrapper"
-          animate={{ y: [0, -5, 0] }}
-          transition={{ repeat: Infinity, duration: 3.5, ease: 'easeInOut' }}
+          style={{ transformOrigin: '50% 100%', willChange: 'transform' }}
+          animate={
+            reduceMotion
+              ? undefined
+              : {
+                  y: [0, -6, -2, 0],
+                  rotate: [0, -1.4, 0.9, 0],
+                  scale: [1, 1.015, 1.005, 1],
+                }
+          }
+          transition={
+            reduceMotion
+              ? undefined
+              : { repeat: Infinity, duration: 6, ease: 'easeInOut', times: [0, 0.35, 0.72, 1] }
+          }
         >
           <Logo size={58} variant="icon" />
         </motion.div>
 
         <div className="login-brand-header">
           <div className="workspace-brand-text login-brand-title">
-            <span className="brand-mark">mark</span>
-            <span className="brand-flare">flare</span>
+            <Logo size={92} variant="word" />
           </div>
           <span className="login-badge">Cloudflare Workspace</span>
         </div>

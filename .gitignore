@@ -20,11 +20,8 @@ uploads/
 
 # Logs
 *.log
-.run-logs/
 
 # Scratch / test junk
-_debug_scratch/
-elementos_testing/
 scripts/
 
 # OS / editor junk
@@ -32,3 +29,4 @@ scripts/
 Thumbs.db
 .vscode/
 .idea/
+.obsidian/

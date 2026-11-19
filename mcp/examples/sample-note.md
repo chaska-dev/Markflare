@@ -1,6 +1,6 @@
-# Markflare Release Notes
+# Parasti Release Notes
 
-> Markflare is a self-hosted, block-based note-taking workspace on Cloudflare Pages + D1 and Express + SQLite.
+> Parasti is a self-hosted, block-based note-taking workspace on Cloudflare Pages + D1 and Express + SQLite.
 
 ---
 
@@ -23,7 +23,7 @@
 ```typescript
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-console.log('Markflare MCP Server ready to synchronize notes.');
+console.log('Parasti MCP Server ready to synchronize notes.');
 ```
 
 ## KaTeX Equation
