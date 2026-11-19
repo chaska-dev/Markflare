@@ -1,4 +1,4 @@
-import type { Page, PageWithBlocks, Block, BlockProps, FileInfo, SearchResult, TrashedPage } from '../types';
+import type { Page, PageWithBlocks, Block, BlockProps, FileInfo, SearchResult, TrashedPage, CalendarEvent } from '../types';
 
 export class ApiError extends Error {
   status: number;
@@ -202,6 +202,15 @@ export const api = {
       request<{ success: boolean }>(`/blocks/${id}${opts?.keepFile ? '?keep_file=1' : ''}`, { method: 'DELETE' }),
     reorder: (blocks: { id: string; position: number }[]) =>
       request<{ success: boolean }>('/blocks/reorder', { method: 'PUT', body: JSON.stringify({ blocks }) }),
+  },
+  events: {
+    list: (from: string, to: string) =>
+      request<{ events: CalendarEvent[] }>(`/events?from=${from}&to=${to}`),
+    create: (data: { title: string; event_date: string; start_time?: string | null; end_time?: string | null }) =>
+      request<{ event: CalendarEvent }>('/events', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { title: string; event_date: string; start_time?: string | null; end_time?: string | null }) =>
+      request<{ event: CalendarEvent }>(`/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id: string) => request<{ success: boolean }>(`/events/${id}`, { method: 'DELETE' }),
   },
   workspace: {
     get: () => request<{ name: string; icon: string }>('/workspace'),

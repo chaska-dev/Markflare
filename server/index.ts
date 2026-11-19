@@ -27,6 +27,7 @@ import {
 const STORED_FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { parseMarkdownToBlocks, blocksToMarkdown } from './shared/markdown';
 import { serializeBlockProps } from './shared/blockProps';
+import { validateEventInput, validateEventRange } from './shared/events';
 import { fetchLinkPreview, LinkPreviewError } from './shared/linkPreview';
 import { requestOnce as previewRequest } from './linkFetch';
 
@@ -247,6 +248,7 @@ app.use('/api/blocks', requireAuth);
 app.use('/api/files/upload', requireAuth);
 app.use('/api/workspace', requireAuth);
 app.use('/api/link-preview', requireAuth);
+app.use('/api/events', requireAuth);
 
 // GET /api/workspace — returns the singleton with the current name and icon.
 app.get('/api/workspace', (_req, res) => {
@@ -850,6 +852,53 @@ app.get('/api/search', requireAuth, (req, res) => {
   }
 
   res.json({ results });
+});
+
+// 9b.5 Calendar events -----------------------------------------------------
+// Same shapes as the Hono backend (functions/api/[[route]].ts). Times are
+// wall-clock "HH:MM" strings (or null = all day); no timezone handling.
+
+app.get('/api/events', (req, res) => {
+  const range = validateEventRange(String(req.query.from || ''), String(req.query.to || ''));
+  if ('error' in range) return res.status(400).json({ error: range.error });
+  // All-day events (start_time null) sort first within their date, like
+  // Google Calendar. The join fetches the whole year the UI needs in one go.
+  const sql = range.value
+    ? 'SELECT * FROM events WHERE event_date >= ? AND event_date <= ? ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC'
+    : 'SELECT * FROM events ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC';
+  const rows = range.value
+    ? db.prepare(sql).all(range.value.from, range.value.to)
+    : db.prepare(sql).all();
+  res.json({ events: rows });
+});
+
+app.post('/api/events', (req, res) => {
+  const v = validateEventInput(req.body);
+  if ('error' in v) return res.status(400).json({ error: v.error });
+  const id = crypto.randomUUID();
+  db.prepare(
+    'INSERT INTO events (id, title, event_date, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, v.value.title, v.value.event_date, v.value.start_time, v.value.end_time);
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(id);
+  res.json({ event });
+});
+
+app.put('/api/events/:id', (req, res) => {
+  const id = req.params.id;
+  const existing: any = db.prepare('SELECT id FROM events WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const v = validateEventInput(req.body);
+  if ('error' in v) return res.status(400).json({ error: v.error });
+  db.prepare(
+    `UPDATE events SET title = ?, event_date = ?, start_time = ?, end_time = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(v.value.title, v.value.event_date, v.value.start_time, v.value.end_time, id);
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(id);
+  res.json({ event });
+});
+
+app.delete('/api/events/:id', (req, res) => {
+  const info = db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
+  res.json({ success: true, deleted: info.changes });
 });
 
 // 9c. GET /api/link-preview?url=... — title, description, image, site name and

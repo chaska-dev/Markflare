@@ -3,6 +3,7 @@ import { handle } from 'hono/cloudflare-pages';
 import type { Context } from 'hono';
 import { parseMarkdownToBlocks, blocksToMarkdown } from '../../server/shared/markdown';
 import { parseBlockProps, serializeBlockProps } from '../../server/shared/blockProps';
+import { validateEventInput, validateEventRange } from '../../server/shared/events';
 import {
   fetchLinkPreview,
   LinkPreviewError,
@@ -236,6 +237,17 @@ async function ensureSchema(db: D1Database) {
         expires_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_api_tokens_id ON api_tokens(id);
+
+      CREATE TABLE IF NOT EXISTS events (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT '',
+        event_date TEXT NOT NULL,
+        start_time TEXT,
+        end_time TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
     `);
     schemaInitialized = true;
   } catch (err) {
@@ -425,6 +437,8 @@ app.use('/link-preview', authMiddleware);
 app.use('/auth/token', authMiddleware);
 app.use('/auth/tokens', authMiddleware);
 app.use('/auth/tokens/*', authMiddleware);
+app.use('/events', authMiddleware);
+app.use('/events/*', authMiddleware);
 
 app.post('/auth/token', async (c) => {
   const env = requireEnv(c);
@@ -1153,6 +1167,54 @@ app.get('/search', async (c) => {
   }
 
   return c.json({ results });
+});
+
+// 9b.5 Calendar events (auth-gated) -----------------------------------------
+// Same contract as the Express backend (server/index.ts). Times are wall-clock
+// "HH:MM" strings (or null = all day); no timezone handling.
+
+app.get('/events', async (c) => {
+  const range = validateEventRange(c.req.query('from') || '', c.req.query('to') || '');
+  if ('error' in range) return c.json({ error: range.error }, 400);
+  const order = 'ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC';
+  const stmt = range.value
+    ? c.env.DB.prepare(
+        `SELECT * FROM events WHERE event_date >= ? AND event_date <= ? ${order}`
+      ).bind(range.value.from, range.value.to)
+    : c.env.DB.prepare(`SELECT * FROM events ${order}`);
+  const { results } = await stmt.all();
+  return c.json({ events: results || [] });
+});
+
+app.post('/events', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const v = validateEventInput(body);
+  if ('error' in v) return c.json({ error: v.error }, 400);
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    'INSERT INTO events (id, title, event_date, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
+  ).bind(id, v.value.title, v.value.event_date, v.value.start_time, v.value.end_time).run();
+  const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(id).first();
+  return c.json({ event });
+});
+
+app.put('/events/:id', async (c) => {
+  const id = c.req.param('id');
+  const existing = await c.env.DB.prepare('SELECT id FROM events WHERE id = ?').bind(id).first();
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+  const body = await c.req.json().catch(() => null);
+  const v = validateEventInput(body);
+  if ('error' in v) return c.json({ error: v.error }, 400);
+  await c.env.DB.prepare(
+    `UPDATE events SET title = ?, event_date = ?, start_time = ?, end_time = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(v.value.title, v.value.event_date, v.value.start_time, v.value.end_time, id).run();
+  const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(id).first();
+  return c.json({ event });
+});
+
+app.delete('/events/:id', async (c) => {
+  const { meta } = await c.env.DB.prepare('DELETE FROM events WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ success: true, deleted: meta.changes });
 });
 
 // 10. POST /api/files/upload — R2 is the only binary backend. There is no D1

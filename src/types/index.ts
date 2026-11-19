@@ -122,6 +122,18 @@ export interface PageWithBlocks extends Page {
   blocks: Block[];
 }
 
+// Calendar event. Times are wall-clock "HH:MM" strings, or null for an
+// all-day event. No timezone info is stored on purpose (single-user app).
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FileInfo {
   id: string;
   name: string;

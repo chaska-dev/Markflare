@@ -20,6 +20,7 @@ import {
   SunIcon,
   MoonIcon,
   TrashIcon,
+  CalendarIcon,
 } from './Icons';
 import { StarIcon, StarFilledIcon, DuplicateIcon } from './PageIcons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -627,7 +628,19 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
       <aside className={sidebarClass} aria-hidden={isOverlayOpen ? false : (isMobile ? !mobileOpen : false)}>
         <div className="sidebar-header">
           {!collapsed && (
-            <div className="workspace-name workspace-name--brand">
+            <div
+              className="workspace-name workspace-name--brand"
+              onClick={() => navigate('/')}
+              role="button"
+              tabIndex={0}
+              title={t('app.name')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/');
+                }
+              }}
+            >
               {workspace.icon ? (
                 <span className="workspace-icon-emoji">{workspace.icon}</span>
               ) : (
@@ -852,14 +865,24 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
 
         {/* Trash entry, pinned above the footer */}
         {!collapsed && (
-          <button
-            type="button"
-            className="sidebar-trash-row"
-            onClick={() => setTrashOpen(true)}
-          >
-            <TrashIcon size={15} />
-            <span>{t('trash.title')}</span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="sidebar-trash-row"
+              onClick={() => navigate('/calendar')}
+            >
+              <CalendarIcon size={15} />
+              <span>{t('calendar.title')}</span>
+            </button>
+            <button
+              type="button"
+              className="sidebar-trash-row"
+              onClick={() => setTrashOpen(true)}
+            >
+              <TrashIcon size={15} />
+              <span>{t('trash.title')}</span>
+            </button>
+          </>
         )}
 
         {/* Footer: Profile + Theme toggle */}
@@ -923,6 +946,14 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
 
         {collapsed && (
           <div className="sidebar-footer sidebar-footer--collapsed">
+            <button
+              className="sidebar-btn"
+              onClick={() => navigate('/calendar')}
+              title={t('calendar.title')}
+              aria-label={t('calendar.title')}
+            >
+              <CalendarIcon size={16} />
+            </button>
             <button
               className="sidebar-btn"
               onClick={() => setTrashOpen(true)}

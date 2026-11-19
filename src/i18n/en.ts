@@ -484,6 +484,28 @@ export const en = {
   'page.moreActions': 'More actions',
   'page.fullWidth': 'Full width',
   'page.standardWidth': 'Standard width',
+
+  // Calendar
+  'calendar.title': 'Calendar',
+  'calendar.today': 'Today',
+  'calendar.viewDay': 'Day',
+  'calendar.viewMonth': 'Month',
+  'calendar.viewYear': 'Year',
+  'calendar.newEvent': 'New event',
+  'calendar.editEvent': 'Edit event',
+  'calendar.eventTitle': 'Title',
+  'calendar.eventTitlePlaceholder': 'Event title',
+  'calendar.date': 'Date',
+  'calendar.startTime': 'Start',
+  'calendar.endTime': 'End',
+  'calendar.allDay': 'All day',
+  'calendar.noEvents': 'No events',
+  'calendar.titleRequired': 'Title is required',
+  'calendar.deleteEvent': 'Delete event',
+  'calendar.confirmDeleteTitle': 'Delete "{title}"?',
+  'calendar.confirmDeleteBody': 'This event will be removed from the calendar.',
+  'calendar.loadError': 'Failed to load events',
+  'calendar.actionError': 'Something went wrong',
 };
 
 export type TranslationKey = keyof typeof en;

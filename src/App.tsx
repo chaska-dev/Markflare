@@ -8,6 +8,7 @@ import { LanguageProvider } from './i18n/LanguageContext';
 import { Layout } from './components/Layout';
 import { EmptyState } from './components/EmptyState';
 import { PageView } from './components/PageView';
+import { CalendarPage } from './components/CalendarPage';
 import { Login } from './components/Login';
 import { SharedView } from './components/SharedView';
 
@@ -49,6 +50,7 @@ function App() {
                 <Route path="/" element={<Layout />}>
                   <Route index element={<EmptyState />} />
                   <Route path="page/:id" element={<PageView />} />
+                  <Route path="calendar" element={<CalendarPage />} />
                 </Route>
               </Route>
             </Routes>
