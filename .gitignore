@@ -24,6 +24,13 @@ uploads/
 # Scratch / test junk
 scripts/
 
+# Graphify knowledge graph output
+graphify-out/
+
+# Agent config
+.claude/
+.opencode/
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

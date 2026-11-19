@@ -1,1 +1,0 @@
-{"nodes": [{"id": "$graphify-root$_migrations_0007_block_props_sql", "label": "0007_block_props.sql", "file_type": "code", "source_file": "migrations/0007_block_props.sql", "source_location": null}, {"id": "blocks", "label": "blocks", "file_type": "code", "source_file": "", "source_location": "", "origin_file": "$graphify-root$/migrations/0007_block_props.sql"}], "edges": []}
