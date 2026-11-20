@@ -51,7 +51,7 @@ sharing one username and password.
 
 | Variable | Description |
 |---|---|
-| `PARASTI_URL` | Base URL of your Parasti instance (e.g. `http://localhost:3000` or `https://your-app.pages.dev`). |
+| `PARASTI_URL` | Base URL of your Parasti instance (e.g. `http://localhost:3000` or `https://your-app.workers.dev`). |
 | `PARASTI_API_TOKEN` | Dedicated API token generated from the UI or CLI (Recommended). |
 | `PARASTI_USERNAME` | Username fallback (if no token is provided). |
 | `PARASTI_PASSWORD` | Password fallback (if no token is provided). |

@@ -367,6 +367,7 @@ transaction. They are idempotent, so re-running is safe.
 | `0006_page_features.sql` | `pages.deleted_at` (Trash), `is_favorite`, `full_width`, `is_project`, `cover` + index |
 | `0007_block_props.sql` | `blocks.props` — JSON bag for per-block settings (image width / alignment / caption) |
 | `0008_events.sql` | `events` — calendar events: a wall-clock date plus optional `start_time`/`end_time` (`HH:MM`; NULL = all-day), no timezone column on purpose |
+| `0009_users.sql` | `users` — accounts (PBKDF2 hashes) + `owner_user_id` columns on `pages`/`events`/`files` and `user_id` on `api_tokens` (multi-user isolation) |
 
 > **`0006` is required before deploying this version.** The API now filters on
 > `pages.deleted_at`, so against a D1 that has not applied it every page request fails with
@@ -382,6 +383,13 @@ transaction. They are idempotent, so re-running is safe.
 > so a D1 without it makes every events request fail with "no such table". Unlike `0006`
 > and `0007` it is a plain `CREATE TABLE IF NOT EXISTS`, so applying it by hand is safe to
 > re-run.
+>
+> **`0009` is required before deploying this version.** The API authenticates against the
+> `users` table and filters every data query by `owner_user_id` / `user_id`, so a D1
+> without it makes login fail with "no such table" (and every list come back empty). On a
+> fresh remote, `pnpm run db:migrate:prod` applies everything in order — including the
+> legacy-data backfill, which assigns all pre-multi-user pages/events/files to the first
+> admin on the next request.
 
 To apply them to a remote D1 from a terminal:
 
