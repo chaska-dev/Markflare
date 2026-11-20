@@ -48,6 +48,7 @@ events, image and file uploads, and a bilingual interface (English / Spanish).
 | 9 | [Model Context Protocol](#model-context-protocol-mcp) | AI assistant integration |
 | 10 | [Notes](#notes) | Design decisions worth knowing |
 | 11 | [Branching workflow](BRANCHING.md) | How the `dev`, `staging` and `main` branches work |
+| 12 | [Version numbering](VERSIONING.md) | SemVer rules, what bumps MAJOR/MINOR/PATCH, pre-releases and tags |
 
 ---
 
