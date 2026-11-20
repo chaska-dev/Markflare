@@ -15,7 +15,7 @@
 
 /* Icon-only buttons in .page-actions keep the same height as labelled ones. */
 .page-action-btn--icon {
-  padding: 5px 7px;
+  padding: 8px 9px;
 }
 
 /* ---- Trash banner (page opened while it is in Trash) ---- */

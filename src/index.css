@@ -1325,7 +1325,7 @@ body {
   margin-left: 24px;
 }
 .page-action-btn {
-  padding: 5px 10px;
+  padding: 8px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -3631,7 +3631,6 @@ button:hover .icon-document,
 
 .page-header--with-cover {
   position: relative;
-  margin-top: -44px;
   z-index: 10;
 }
 
