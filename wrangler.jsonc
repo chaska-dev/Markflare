@@ -32,8 +32,7 @@
         {
           "binding": "DB",
           "database_name": "parasti-staging-db",
-          // TODO(Roki): isi database_id dari `wrangler d1 create parasti-staging-db`
-          "database_id": "00000000-0000-0000-0000-000000000000"
+          "database_id": "d0311879-c921-4513-a91e-48241457641a"
         }
       ],
       "r2_buckets": [
