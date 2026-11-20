@@ -8,8 +8,9 @@ It allows any LLM or AI agent to:
 - Query the workspace page hierarchy and retrieve page identifiers (`parentId`).
 - Search across existing pages and blocks in Parasti.
 - Inspect page details and ordered blocks by page ID.
+- Upload local images into a page at a chosen position.
 
-Beyond pages, this server can also write your calendar and create projects: it creates, lists, updates, and deletes events, and it builds project roots with nested sub-pages, not only standalone pages.
+Beyond pages, this server can also write your calendar, create projects, and place images: it creates, lists, updates, and deletes events, builds project roots with nested sub-pages, and inserts image blocks after a given block or at a given index.
 
 ---
 
@@ -53,6 +54,7 @@ sharing one username and password.
 | `create_project` | `title` *(string, required)*<br>`icon` *(string, optional, max 32 chars)* | Creates a root page flagged as a project. |
 | `list_projects` | *(none)* | Lists projects (root pages with `is_project`). |
 | `create_page` | `title` *(string, required)*<br>`icon` *(string, optional, max 32 chars)*<br>`parentId` *(string, optional)* | Creates an empty page, optionally nested under a project or private page. |
+| `upload_image` | `filePath` *(string, required)*<br>`pageId` *(string, required)*<br>`afterBlockId` *(string, optional)*<br>`positionIndex` *(number, optional)*<br>`caption` *(string, optional)*<br>`alt` *(string, optional)* | Uploads a local image (png, jpg, gif, webp, svg, bmp, avif; max 25 MB) as an image block. Inserts after a block, before an index, or appends at the end. |
 
 ---
 
