@@ -22,5 +22,26 @@
       // TODO(Roki): sesuaikan dengan nama bucket R2 yang kamu buat
       "bucket_name": "parasti-files"
     }
-  ]
+  ],
+  // Staging: nama Worker otomatis "parasti-staging". `assets` di atas
+  // berlaku juga di sini karena termasuk key yang diwariskan; binding D1/R2
+  // TIDAK diwariskan sehingga harus dideklarasikan ulang.
+  "env": {
+    "staging": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "parasti-staging-db",
+          // TODO(Roki): isi database_id dari `wrangler d1 create parasti-staging-db`
+          "database_id": "00000000-0000-0000-0000-000000000000"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "BUCKET",
+          "bucket_name": "parasti-staging-files"
+        }
+      ]
+    }
+  }
 }
