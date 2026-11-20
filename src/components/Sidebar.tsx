@@ -29,6 +29,8 @@ import { WorkspaceSettings } from './WorkspaceSettings';
 import { UserMenuPopover } from './UserMenuPopover';
 import { IconColorPickerModal } from './IconColorPickerModal';
 import { ApiTokenModal } from './ApiTokenModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { AdminUsersModal } from './AdminUsersModal';
 import { ImportModal } from './ImportModal';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
 import { TrashModal } from './TrashModal';
@@ -485,7 +487,7 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
   const { pages, createPage, updatePage, refreshPages } = usePageContext();
   const { workspace } = useWorkspace();
   const tree = useMemo(() => buildPageTree(pages), [pages]);
-  const { username, logout } = useAuth();
+  const { user } = useAuth();
   const {
     isMobile,
     isNarrow,
@@ -504,6 +506,8 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [apiTokenOpen, setApiTokenOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [adminUsersOpen, setAdminUsersOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { id: currentId } = useParams();
@@ -909,8 +913,8 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
                 <UserIcon size={14} />
               </div>
               <div className="sidebar-user-info">
-                <span className="sidebar-user-name">{username}</span>
-                <span className="sidebar-user-role">{username === 'admin' ? t('sidebar.adminRole') : t('sidebar.userRole')}</span>
+                <span className="sidebar-user-name">{user?.displayName || user?.username}</span>
+                <span className="sidebar-user-role">{user?.isAdmin ? t('sidebar.adminRole') : t('sidebar.userRole')}</span>
               </div>
               <MoreHorizontalIcon size={14} className="sidebar-user-more" />
             </div>
@@ -927,6 +931,12 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
               }}
               onOpenApiToken={() => {
                 setApiTokenOpen(true);
+              }}
+              onOpenChangePassword={() => {
+                setChangePasswordOpen(true);
+              }}
+              onOpenAdminUsers={() => {
+                setAdminUsersOpen(true);
               }}
             />
 
@@ -965,8 +975,8 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
             <button
               className="sidebar-btn sidebar-btn--user"
               onClick={() => setUserMenuOpen(prev => !prev)}
-              title={username || 'User'}
-              aria-label={username || 'User'}
+              title={user?.displayName || user?.username || 'User'}
+              aria-label={user?.displayName || user?.username || 'User'}
             >
               <UserIcon size={16} />
             </button>
@@ -982,6 +992,12 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
               }}
               onOpenApiToken={() => {
                 setApiTokenOpen(true);
+              }}
+              onOpenChangePassword={() => {
+                setChangePasswordOpen(true);
+              }}
+              onOpenAdminUsers={() => {
+                setAdminUsersOpen(true);
               }}
             />
             <LanguageSwitcher />
@@ -1011,6 +1027,16 @@ export function Sidebar({ onOpenSearch }: { onOpenSearch?: () => void } = {}) {
       <ApiTokenModal
         open={apiTokenOpen}
         onClose={() => setApiTokenOpen(false)}
+      />
+
+      <ChangePasswordModal
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+      />
+
+      <AdminUsersModal
+        open={adminUsersOpen}
+        onClose={() => setAdminUsersOpen(false)}
       />
 
       <TrashModal open={trashOpen} onClose={() => setTrashOpen(false)} />

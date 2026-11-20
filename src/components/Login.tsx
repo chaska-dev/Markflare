@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { useLanguage } from '../i18n/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -19,7 +18,6 @@ import {
 export function Login() {
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,7 +32,9 @@ export function Login() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate('/');
+      // Full reload: PageContext must refetch the new account's pages instead
+      // of keeping the previous user's tree in memory.
+      window.location.href = '/';
     } catch (err) {
       setError(t('login.invalidCredentials'));
     } finally {

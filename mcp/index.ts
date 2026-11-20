@@ -54,6 +54,9 @@ const config = getEnvConfig();
 let cachedToken: string | null = config.apiToken;
 let tokenExpiresAt = config.apiToken ? Infinity : 0;
 
+// PARASTI_API_TOKEN wins when present: each account has its own token and only
+// sees its owner's data. The username/password path stays as a fallback for
+// local runs that have not created a token yet.
 async function getAuthToken(): Promise<string> {
   if (config.apiToken) {
     return config.apiToken;

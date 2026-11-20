@@ -12,6 +12,22 @@ export class ApiError extends Error {
   }
 }
 
+export interface ApiUser {
+  id: string;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
 const API_BASE = '/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -28,6 +44,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     if (!path.startsWith('/share')) {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_expires_at');
+      localStorage.removeItem('auth_display_name');
+      localStorage.removeItem('auth_is_admin');
       window.location.href = '/login';
     }
     throw new ApiError('Unauthorized', 401);
@@ -49,9 +67,21 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   auth: {
     login: (username: string, password: string) =>
-      request<{ token: string; username: string; expiresAt: number }>('/auth/login', {
+      request<{
+        token: string;
+        username: string;
+        displayName: string;
+        isAdmin: boolean;
+        expiresAt: number;
+      }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),
+      }),
+    me: () => request<ApiUser>('/auth/me'),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<{ success: boolean }>('/auth/password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
       }),
     createToken: (name?: string, expiresInDays?: number) =>
       request<{ id: string; name: string; token: string; expiresAt: number; createdAt: string }>('/auth/token', {
@@ -63,6 +93,24 @@ export const api = {
     deleteToken: (id: string) =>
       request<{ success: boolean; id: string }>(`/auth/tokens/${id}`, {
         method: 'DELETE',
+      }),
+  },
+  admin: {
+    listUsers: () => request<{ users: AdminUser[] }>('/admin/users'),
+    createUser: (data: { username: string; displayName?: string; password: string; isAdmin?: boolean }) =>
+      request<{ user: AdminUser }>('/admin/users', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateUser: (id: string, data: { displayName?: string; isActive?: boolean; isAdmin?: boolean }) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    resetPassword: (id: string, newPassword: string) =>
+      request<{ success: boolean }>(`/admin/users/${id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ newPassword }),
       }),
   },
   files: {
@@ -81,6 +129,8 @@ export const api = {
       if (res.status === 401) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_expires_at');
+        localStorage.removeItem('auth_display_name');
+        localStorage.removeItem('auth_is_admin');
         window.location.href = '/login';
         throw new Error('Unauthorized');
       }
@@ -124,6 +174,8 @@ export const api = {
           if (xhr.status === 401) {
             localStorage.removeItem('auth_token');
             localStorage.removeItem('auth_expires_at');
+            localStorage.removeItem('auth_display_name');
+            localStorage.removeItem('auth_is_admin');
             window.location.href = '/login';
             return reject(new ApiError('Unauthorized', 401));
           }

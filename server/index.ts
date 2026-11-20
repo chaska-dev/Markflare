@@ -17,9 +17,10 @@ import {
   verifyToken,
   checkRate,
   clientIp,
-  timingSafeEqual,
   AuthEnv,
 } from './auth';
+import { validateUsername, validatePassword, validateDisplayName } from './shared/users';
+import { hashPassword, verifyPassword, PBKDF2_ITERATIONS } from './shared/passwords';
 
 // An image/file block points at its upload through `content`, but that column
 // can also hold an http(s) URL or a data: URI. Only a bare UUID is a storage
@@ -50,6 +51,41 @@ if (migResult.applied.length > 0) {
 if (migResult.skipped.length > 0) {
   console.log(`[server] migrations already applied: ${migResult.skipped.join(', ')}`);
 }
+
+// Create the first admin from the env credentials when the users table is
+// still empty, then give every legacy row an owner. Mirrors ensureSeedAdmin in
+// functions/api/[[route]].ts.
+async function ensureSeedAdmin(db: any, authEnv: AuthEnv): Promise<void> {
+  const count: any = db.prepare('SELECT COUNT(*) AS n FROM users').get();
+  if ((count?.n ?? 0) === 0) {
+    const v = validateUsername(authEnv.username);
+    if ('error' in v) {
+      console.error('[server] AUTH_USERNAME is not a valid username; no admin created');
+    } else {
+      const pw = await hashPassword(authEnv.password);
+      db.prepare(
+        `INSERT OR IGNORE INTO users
+           (id, username, display_name, password_hash, password_salt, password_iterations, is_admin, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 1)`
+      ).run(crypto.randomUUID(), v.value, v.value, pw.hash, pw.salt, pw.iterations);
+    }
+  }
+
+  const admin: any = db
+    .prepare('SELECT id FROM users WHERE is_admin = 1 ORDER BY created_at ASC, id ASC LIMIT 1')
+    .get();
+  if (!admin) return;
+
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE pages SET owner_user_id = ? WHERE owner_user_id IS NULL').run(admin.id);
+    db.prepare('UPDATE events SET owner_user_id = ? WHERE owner_user_id IS NULL').run(admin.id);
+    db.prepare('UPDATE files SET owner_user_id = ? WHERE owner_user_id IS NULL').run(admin.id);
+    db.prepare('UPDATE api_tokens SET user_id = ? WHERE user_id IS NULL').run(admin.id);
+  });
+  tx();
+}
+
+await ensureSeedAdmin(db, authEnv);
 
 // Upload size cap, same as the Hono backend (functions/api/[[route]].ts) and
 // the client-side check.
@@ -106,16 +142,48 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const token = header.slice('Bearer '.length).trim();
-  verifyToken(token, authEnv.username, authEnv.secret).then(v => {
-    if (!v.ok) return res.status(401).json({ error: v.expired ? 'Session expired' : 'Unauthorized' });
+  verifyToken(token, authEnv.secret).then(v => {
+    if (!v.ok || !v.username) {
+      return res.status(401).json({ error: v.expired ? 'Session expired' : 'Unauthorized' });
+    }
+    const user: any = db
+      .prepare('SELECT id, username, display_name, is_admin, is_active FROM users WHERE username = ?')
+      .get(v.username.toLowerCase());
+    if (!user || !user.is_active) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     if (v.isApi && v.tokenId) {
-      const row = db.prepare('SELECT id FROM api_tokens WHERE id = ?').get(v.tokenId);
-      if (!row) {
+      const apiToken: any = db.prepare('SELECT id, user_id FROM api_tokens WHERE id = ?').get(v.tokenId);
+      if (!apiToken) {
         return res.status(401).json({ error: 'Token has been revoked' });
       }
+      if (apiToken.user_id !== user.id) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
     }
+    res.locals.user = {
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name || user.username,
+      isAdmin: Boolean(user.is_admin),
+    };
     next();
   }).catch(() => res.status(401).json({ error: 'Unauthorized' }));
+}
+
+function requireAdmin(_req: Request, res: Response, next: NextFunction) {
+  if (!res.locals.user?.isAdmin) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
+// The single ownership check for page-scoped actions (plan-00 §3.7). A missing
+// page and someone else's page are both "not owned", which callers turn into
+// a 404 so the existence of other users' data never leaks.
+function pageOwnedBy(pageId: string, userId: string): boolean {
+  const row: any = db.prepare('SELECT owner_user_id FROM pages WHERE id = ?').get(pageId);
+  return !!row && row.owner_user_id === userId;
 }
 
 // Routes
@@ -133,33 +201,51 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   if (username.length > 128 || password.length > 1024) {
     return res.status(400).json({ error: 'Invalid credentials' });
   }
-  const uOk = timingSafeEqual(username, authEnv.username);
-  const pOk = timingSafeEqual(password, authEnv.password);
-  if (!uOk || !pOk) {
+  const normalized = username.trim().toLowerCase();
+  const user: any = db
+    .prepare('SELECT * FROM users WHERE username = ? AND is_active = 1')
+    .get(normalized);
+  const passwordOk = user
+    ? await verifyPassword(password, {
+        hash: user.password_hash,
+        salt: user.password_salt,
+        iterations: Number(user.password_iterations) || PBKDF2_ITERATIONS,
+      })
+    : false;
+  if (!user || !passwordOk) {
     console.warn(`[auth] login failed ip=${ip}`);
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  const { token, expiresAt } = await issueToken(authEnv.username, authEnv.secret);
-  return res.json({ token, username: authEnv.username, expiresAt });
+  const { token, expiresAt } = await issueToken(user.username, authEnv.secret);
+  return res.json({
+    token,
+    username: user.username,
+    displayName: user.display_name || user.username,
+    isAdmin: Boolean(user.is_admin),
+    expiresAt,
+  });
 });
 
 // API Token management endpoints (auth-gated)
 
 // POST /api/auth/token — generates a dedicated long-lived token for MCP / external tools
 app.post('/api/auth/token', requireAuth, async (req: Request, res: Response) => {
+  const user = res.locals.user;
   const name = typeof req.body?.name === 'string' && req.body.name.trim() ? req.body.name.trim().slice(0, 100) : 'MCP Token';
   const expiresInDays = Number(req.body?.expiresInDays) || 365;
   const ttlMs = expiresInDays * 24 * 60 * 60 * 1000;
   const id = crypto.randomUUID();
-  const { token, expiresAt } = await issueToken(authEnv.username, authEnv.secret, ttlMs, id);
-  db.prepare('INSERT INTO api_tokens (id, name, token, expires_at) VALUES (?, ?, ?, ?)').run(id, name, token, expiresAt);
+  const { token, expiresAt } = await issueToken(user.username, authEnv.secret, ttlMs, id);
+  db.prepare('INSERT INTO api_tokens (id, name, token, expires_at, user_id) VALUES (?, ?, ?, ?, ?)')
+    .run(id, name, token, expiresAt, user.id);
   const row: any = db.prepare('SELECT id, name, token, created_at, expires_at FROM api_tokens WHERE id = ?').get(id);
   return res.json({ id: row.id, name: row.name, token: row.token, expiresAt: row.expires_at, createdAt: row.created_at });
 });
 
-// GET /api/auth/tokens — lists all active API tokens
+// GET /api/auth/tokens — lists the current user's API tokens
 app.get('/api/auth/tokens', requireAuth, (req: Request, res: Response) => {
-  const rows: any[] = db.prepare('SELECT id, name, token, created_at, expires_at FROM api_tokens ORDER BY created_at DESC').all();
+  const user = res.locals.user;
+  const rows: any[] = db.prepare('SELECT id, name, token, created_at, expires_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC').all(user.id);
   const tokens = rows.map(r => ({
     id: r.id,
     name: r.name,
@@ -170,11 +256,166 @@ app.get('/api/auth/tokens', requireAuth, (req: Request, res: Response) => {
   return res.json({ tokens });
 });
 
-// DELETE /api/auth/tokens/:id — revokes/deletes an API token
+// DELETE /api/auth/tokens/:id — revokes/deletes one of the current user's tokens
 app.delete('/api/auth/tokens/:id', requireAuth, (req: Request, res: Response) => {
   const id = req.params.id;
-  db.prepare('DELETE FROM api_tokens WHERE id = ?').run(id);
+  const user = res.locals.user;
+  db.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').run(id, user.id);
   return res.json({ success: true, id });
+});
+
+app.get('/api/auth/me', requireAuth, (_req: Request, res: Response) => {
+  const user = res.locals.user;
+  return res.json({
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    isAdmin: user.isAdmin,
+  });
+});
+
+app.post('/api/auth/password', requireAuth, async (req: Request, res: Response) => {
+  const user = res.locals.user;
+  const b = req.body || {};
+  if (typeof b.currentPassword !== 'string' || typeof b.newPassword !== 'string') {
+    return res.status(400).json({ error: 'Invalid body' });
+  }
+  const row: any = db
+    .prepare('SELECT password_hash, password_salt, password_iterations FROM users WHERE id = ?')
+    .get(user.id);
+  if (!row) return res.status(401).json({ error: 'Unauthorized' });
+  const ok = await verifyPassword(b.currentPassword, {
+    hash: row.password_hash,
+    salt: row.password_salt,
+    iterations: Number(row.password_iterations) || PBKDF2_ITERATIONS,
+  });
+  if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
+
+  const v = validatePassword(b.newPassword);
+  if ('error' in v) return res.status(400).json({ error: v.error });
+
+  const pw = await hashPassword(v.value);
+  db.prepare(
+    `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(pw.hash, pw.salt, pw.iterations, user.id);
+  return res.json({ success: true });
+});
+
+// Admin account management. Admins manage accounts only — they never get a
+// route that returns another user's pages, events or files.
+function toAdminUser(r: any) {
+  return {
+    id: r.id,
+    username: r.username,
+    displayName: r.display_name || r.username,
+    isAdmin: Boolean(r.is_admin),
+    isActive: Boolean(r.is_active),
+    createdAt: r.created_at,
+  };
+}
+
+app.use('/api/admin', requireAuth, requireAdmin);
+
+app.get('/api/admin/users', (_req: Request, res: Response) => {
+  const rows: any[] = db
+    .prepare('SELECT id, username, display_name, is_admin, is_active, created_at FROM users ORDER BY created_at ASC, id ASC')
+    .all();
+  return res.json({ users: rows.map(toAdminUser) });
+});
+
+app.post('/api/admin/users', async (req: Request, res: Response) => {
+  const b = req.body || {};
+  const uv = validateUsername(b.username);
+  if ('error' in uv) return res.status(400).json({ error: uv.error });
+  const pv = validatePassword(b.password);
+  if ('error' in pv) return res.status(400).json({ error: pv.error });
+  const dv = validateDisplayName(b.displayName, uv.value);
+  if ('error' in dv) return res.status(400).json({ error: dv.error });
+
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(uv.value);
+  if (existing) return res.status(409).json({ error: 'Username already exists' });
+
+  const id = crypto.randomUUID();
+  const pw = await hashPassword(pv.value);
+  db.prepare(
+    `INSERT INTO users (id, username, display_name, password_hash, password_salt, password_iterations, is_admin, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(id, uv.value, dv.value, pw.hash, pw.salt, pw.iterations, b.isAdmin === true ? 1 : 0);
+
+  const row: any = db
+    .prepare('SELECT id, username, display_name, is_admin, is_active, created_at FROM users WHERE id = ?')
+    .get(id);
+  return res.json({ user: toAdminUser(row) });
+});
+
+app.patch('/api/admin/users/:id', (req: Request, res: Response) => {
+  const id = req.params.id;
+  const current = res.locals.user;
+  const b = req.body || {};
+
+  const existing: any = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  if (id === current.id && b.isActive === false) {
+    return res.status(400).json({ error: 'You cannot deactivate your own account' });
+  }
+  if (id === current.id && b.isAdmin === false) {
+    return res.status(400).json({ error: 'You cannot remove your own admin role' });
+  }
+
+  const wasActiveAdmin = Boolean(existing.is_admin) && Boolean(existing.is_active);
+  const losesAdmin = b.isActive === false || b.isAdmin === false;
+  if (wasActiveAdmin && losesAdmin) {
+    const others: any = db
+      .prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_active = 1 AND id != ?')
+      .get(id);
+    if ((others?.n ?? 0) === 0) {
+      return res.status(400).json({ error: 'At least one active admin is required' });
+    }
+  }
+
+  const updates: string[] = [];
+  const params: any[] = [];
+  if (b.displayName !== undefined) {
+    const dv = validateDisplayName(b.displayName, existing.username);
+    if ('error' in dv) return res.status(400).json({ error: dv.error });
+    updates.push('display_name = ?');
+    params.push(dv.value);
+  }
+  if (typeof b.isActive === 'boolean') {
+    updates.push('is_active = ?');
+    params.push(b.isActive ? 1 : 0);
+  }
+  if (typeof b.isAdmin === 'boolean') {
+    updates.push('is_admin = ?');
+    params.push(b.isAdmin ? 1 : 0);
+  }
+
+  if (updates.length > 0) {
+    updates.push(`updated_at = datetime('now')`);
+    params.push(id);
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+
+  const row: any = db
+    .prepare('SELECT id, username, display_name, is_admin, is_active, created_at FROM users WHERE id = ?')
+    .get(id);
+  return res.json({ user: toAdminUser(row) });
+});
+
+app.post('/api/admin/users/:id/reset-password', async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  const pv = validatePassword(req.body?.newPassword);
+  if ('error' in pv) return res.status(400).json({ error: pv.error });
+
+  const pw = await hashPassword(pv.value);
+  db.prepare(
+    `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, updated_at = datetime('now') WHERE id = ?`
+  ).run(pw.hash, pw.salt, pw.iterations, id);
+  return res.json({ success: true });
 });
 
 // Public share endpoints (NO auth required).
@@ -295,8 +536,9 @@ app.put('/api/workspace', (req, res) => {
 // create the row with revoked=0.
 app.post('/api/pages/:id/share', (req, res) => {
   const pageId = req.params.id;
+  const user = res.locals.user;
   const page: any = db.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').get(pageId);
-  if (!page) return res.status(404).json({ error: 'Page not found' });
+  if (!page || !pageOwnedBy(pageId, user.id)) return res.status(404).json({ error: 'Page not found' });
 
   const existing: any = db.prepare('SELECT token, revoked FROM page_shares WHERE page_id = ?').get(pageId);
   // Always generate a new token on activation so a "stale" share that gets
@@ -316,6 +558,8 @@ app.post('/api/pages/:id/share', (req, res) => {
 // GET /api/pages/:id/share — returns share info if active, or 404.
 app.get('/api/pages/:id/share', (req, res) => {
   const pageId = req.params.id;
+  const user = res.locals.user;
+  if (!pageOwnedBy(pageId, user.id)) return res.status(404).json({ error: 'Not found' });
   const row: any = db
     .prepare('SELECT token, revoked, created_at FROM page_shares WHERE page_id = ? AND revoked = 0')
     .get(pageId);
@@ -327,15 +571,18 @@ app.get('/api/pages/:id/share', (req, res) => {
 // delete) so a future POST reuses the slot instead of creating another.
 app.delete('/api/pages/:id/share', (req, res) => {
   const pageId = req.params.id;
+  const user = res.locals.user;
+  if (!pageOwnedBy(pageId, user.id)) return res.status(404).json({ error: 'Not found' });
   const info = db.prepare('UPDATE page_shares SET revoked = 1 WHERE page_id = ?').run(pageId);
   res.json({ success: true, changed: info.changes });
 });
 
 // 1. GET /api/pages
 app.get('/api/pages', (_req, res) => {
+  const user = res.locals.user;
   const pages = db
-    .prepare('SELECT * FROM pages WHERE deleted_at IS NULL ORDER BY position ASC, created_at DESC')
-    .all();
+    .prepare('SELECT * FROM pages WHERE owner_user_id = ? AND deleted_at IS NULL ORDER BY position ASC, created_at DESC')
+    .all(user.id);
   res.json({ pages: pages.map((p: any) => normalizePage(p)) });
 });
 
@@ -420,24 +667,26 @@ function purgePages(pageIds: string[]): { deletedFiles: number } {
 // trashed together with its parent comes back with it, so it has no row of its
 // own.
 const TRASH_ROOTS_SQL = `SELECT id, title, icon, parent_id, deleted_at FROM pages p
-  WHERE p.deleted_at IS NOT NULL
+  WHERE p.deleted_at IS NOT NULL AND p.owner_user_id = ?
     AND (p.parent_id IS NULL
          OR NOT EXISTS (SELECT 1 FROM pages pp WHERE pp.id = p.parent_id AND pp.deleted_at IS NOT NULL))`;
 
 // GET /api/pages/trash — also purges roots trashed longer than the retention
 // window, so no cron is needed.
 app.get('/api/pages/trash', (_req, res) => {
+  const user = res.locals.user;
   const cutoff = sqlTimestamp(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  const expired = db.prepare(`${TRASH_ROOTS_SQL} AND p.deleted_at < ?`).all(cutoff) as { id: string }[];
+  const expired = db.prepare(`${TRASH_ROOTS_SQL} AND p.deleted_at < ?`).all(user.id, cutoff) as { id: string }[];
   for (const root of expired) purgePages(collectDescendantPageIds(root.id));
 
-  const pages = db.prepare(`${TRASH_ROOTS_SQL} ORDER BY p.deleted_at DESC`).all();
+  const pages = db.prepare(`${TRASH_ROOTS_SQL} ORDER BY p.deleted_at DESC`).all(user.id);
   res.json({ pages });
 });
 
 // DELETE /api/pages/trash — empty the trash (permanent).
 app.delete('/api/pages/trash', (_req, res) => {
-  const ids = (db.prepare('SELECT id FROM pages WHERE deleted_at IS NOT NULL').all() as { id: string }[])
+  const user = res.locals.user;
+  const ids = (db.prepare('SELECT id FROM pages WHERE deleted_at IS NOT NULL AND owner_user_id = ?').all(user.id) as { id: string }[])
     .map(r => r.id);
   const { deletedFiles } = purgePages(ids);
   res.json({ success: true, deletedPages: ids.length, deletedFiles });
@@ -448,6 +697,8 @@ app.delete('/api/pages/trash', (_req, res) => {
 // Trash (or gone) the page returns at the workspace root instead.
 app.post('/api/pages/:id/restore', (req, res) => {
   const id = req.params.id;
+  const user = res.locals.user;
+  if (!pageOwnedBy(id, user.id)) return res.status(404).json({ error: 'Not found' });
   const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
   if (!page) return res.status(404).json({ error: 'Not found' });
   if (!page.deleted_at) return res.json({ page: normalizePage(page), restoredPages: 0 });
@@ -473,8 +724,9 @@ app.post('/api/pages/:id/restore', (req, res) => {
 // misleading). Image/file blocks keep pointing at the same upload id: the
 // block and page delete paths only remove a file once nothing references it.
 app.post('/api/pages/:id/duplicate', (req, res) => {
+  const user = res.locals.user;
   const src: any = db.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
-  if (!src) return res.status(404).json({ error: 'Not found' });
+  if (!src || !pageOwnedBy(src.id, user.id)) return res.status(404).json({ error: 'Not found' });
 
   const next: any = db.prepare(
     `SELECT MIN(position) AS pos FROM pages
@@ -493,15 +745,15 @@ app.post('/api/pages/:id/duplicate', (req, res) => {
   for (const b of blocks) idMap.set(b.id, crypto.randomUUID());
 
   const insertPage = db.prepare(
-    `INSERT INTO pages (id, title, icon, parent_id, position, cover, full_width, is_project)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO pages (id, title, icon, parent_id, position, cover, full_width, is_project, owner_user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertBlock = db.prepare(
     `INSERT INTO blocks (id, page_id, type, content, checked, language, position, parent_id, collapsed, props)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   db.transaction(() => {
-    insertPage.run(newId, title, src.icon, src.parent_id ?? null, position, src.cover ?? null, src.full_width, src.is_project);
+    insertPage.run(newId, title, src.icon, src.parent_id ?? null, position, src.cover ?? null, src.full_width, src.is_project, user.id);
     for (const b of blocks) {
       insertBlock.run(
         idMap.get(b.id), newId, b.type, b.content, b.checked, b.language, b.position,
@@ -517,6 +769,7 @@ app.post('/api/pages/:id/duplicate', (req, res) => {
 // 2. POST /api/pages
 app.post('/api/pages', (req, res) => {
   const body = req.body || {};
+  const user = res.locals.user;
   const id = crypto.randomUUID();
   const title = typeof body.title === 'string' ? body.title.slice(0, 500) : 'Untitled';
   const icon = typeof body.icon === 'string' ? body.icon.slice(0, 32) : '📄';
@@ -524,13 +777,13 @@ app.post('/api/pages', (req, res) => {
   const position = Number.isFinite(body.position) ? Number(body.position) : 0;
 
   const insertPage = db.prepare(
-    'INSERT INTO pages (id, title, icon, parent_id, position) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO pages (id, title, icon, parent_id, position, owner_user_id) VALUES (?, ?, ?, ?, ?, ?)'
   );
   const insertBlock = db.prepare(
     'INSERT INTO blocks (id, page_id, type, content, position) VALUES (?, ?, ?, ?, ?)'
   );
   const tx = db.transaction(() => {
-    insertPage.run(id, title, icon, parent_id, position);
+    insertPage.run(id, title, icon, parent_id, position, user.id);
     insertBlock.run(crypto.randomUUID(), id, 'paragraph', '', 0);
   });
   tx();
@@ -541,6 +794,7 @@ app.post('/api/pages', (req, res) => {
 // 2.5 POST /api/pages/import
 app.post('/api/pages/import', (req, res) => {
   const body = req.body || {};
+  const user = res.locals.user;
   const markdown = typeof body.markdown === 'string' ? body.markdown : '';
   const safeTitle = typeof body.title === 'string' ? body.title.slice(0, 500) : 'Imported';
   const safeParent = typeof body.parent_id === 'string' ? body.parent_id : null;
@@ -550,13 +804,13 @@ app.post('/api/pages/import', (req, res) => {
   const id = crypto.randomUUID();
 
   const insertPage = db.prepare(
-    'INSERT INTO pages (id, title, icon, parent_id, position) VALUES (?, ?, ?, ?, 0)'
+    'INSERT INTO pages (id, title, icon, parent_id, position, owner_user_id) VALUES (?, ?, ?, ?, 0, ?)'
   );
   const insertBlock = db.prepare(
     'INSERT INTO blocks (id, page_id, type, content, checked, position, language) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
   const tx = db.transaction(() => {
-    insertPage.run(id, pageTitle, '📄', safeParent);
+    insertPage.run(id, pageTitle, '📄', safeParent, user.id);
     blocks.forEach((b, idx) => {
       insertBlock.run(crypto.randomUUID(), id, b.type, b.content, b.checked ? 1 : 0, idx * 1000, b.language || '');
     });
@@ -575,8 +829,9 @@ app.post('/api/pages/import', (req, res) => {
 // uses that to show the "in Trash" banner for a page opened by URL.
 app.get('/api/pages/:id', (req, res) => {
   const id = req.params.id;
+  const user = res.locals.user;
   const page: any = db.prepare('SELECT * FROM pages WHERE id = ?').get(id);
-  if (!page || (page.deleted_at && req.query.include_trashed !== '1')) {
+  if (!page || !pageOwnedBy(id, user.id) || (page.deleted_at && req.query.include_trashed !== '1')) {
     return res.status(404).json({ error: 'Not found' });
   }
   const blocks = db.prepare(
@@ -588,8 +843,9 @@ app.get('/api/pages/:id', (req, res) => {
 // 3.5 GET /api/pages/:id/export
 app.get('/api/pages/:id/export', (req, res) => {
   const id = req.params.id;
+  const user = res.locals.user;
   const page: any = db.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').get(id);
-  if (!page) return res.status(404).json({ error: 'Not found' });
+  if (!page || !pageOwnedBy(id, user.id)) return res.status(404).json({ error: 'Not found' });
   const blocks: any[] = db.prepare(
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
   ).all(id);
@@ -602,9 +858,10 @@ app.get('/api/pages/:id/export', (req, res) => {
 app.put('/api/pages/:id', (req, res) => {
   const id = req.params.id;
   const body = req.body || {};
+  const user = res.locals.user;
   // Pages in Trash are read-only until restored.
   const existing: any = db.prepare('SELECT deleted_at FROM pages WHERE id = ?').get(id);
-  if (!existing || existing.deleted_at) return res.status(404).json({ error: 'Not found' });
+  if (!existing || !pageOwnedBy(id, user.id) || existing.deleted_at) return res.status(404).json({ error: 'Not found' });
   const updates: string[] = [];
   const params: any[] = [];
   if (typeof body.title === 'string') { updates.push('title = ?'); params.push(body.title.slice(0, 500)); }
@@ -636,6 +893,8 @@ app.put('/api/pages/:id', (req, res) => {
 // timestamp, so restoring this page does not resurrect them.
 app.delete('/api/pages/:id', (req, res) => {
   const id = req.params.id;
+  const user = res.locals.user;
+  if (!pageOwnedBy(id, user.id)) return res.status(404).json({ error: 'Not found' });
   const pageIds = collectDescendantPageIds(id);
   const stamp = db.prepare('UPDATE pages SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL');
   const now = sqlTimestamp();
@@ -649,6 +908,8 @@ app.delete('/api/pages/:id', (req, res) => {
 // 5a. DELETE /api/pages/:id/permanent — the real, irreversible delete
 // (cascade: subpages, blocks and their files).
 app.delete('/api/pages/:id/permanent', (req, res) => {
+  const user = res.locals.user;
+  if (!pageOwnedBy(req.params.id, user.id)) return res.status(404).json({ error: 'Not found' });
   const pageIds = collectDescendantPageIds(req.params.id);
   const { deletedFiles } = purgePages(pageIds);
   res.json({ success: true, deletedPages: pageIds.length, deletedFiles });
@@ -659,6 +920,8 @@ app.delete('/api/pages/:id/permanent', (req, res) => {
 // show the real scope in a confirm before running the delete.
 app.get('/api/pages/:id/cascade-count', (req, res) => {
   const id = req.params.id;
+  const user = res.locals.user;
+  if (!pageOwnedBy(id, user.id)) return res.status(404).json({ error: 'Not found' });
   const pageIds = collectDescendantPageIds(id);
   const blocksCount = db.prepare(
     `SELECT COUNT(*) AS n FROM blocks WHERE page_id IN (${pageIds.map(() => '?').join(',')})`
@@ -688,8 +951,9 @@ function collectDescendantPageIds(rootId: string, liveOnly = false): string[] {
 app.post('/api/pages/:pageId/blocks', (req, res) => {
   const pageId = req.params.pageId;
   const body = req.body || {};
-  const owner: any = db.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').get(pageId);
-  if (!owner) return res.status(404).json({ error: 'Page not found' });
+  const user = res.locals.user;
+  const page: any = db.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').get(pageId);
+  if (!page || !pageOwnedBy(pageId, user.id)) return res.status(404).json({ error: 'Page not found' });
   const id = crypto.randomUUID();
 
   const type = typeof body.type === 'string' ? body.type.slice(0, 32) : 'paragraph';
@@ -719,6 +983,11 @@ app.post('/api/pages/:pageId/blocks', (req, res) => {
 app.put('/api/blocks/:id', (req, res) => {
   const id = req.params.id;
   const body = req.body || {};
+  const user = res.locals.user;
+  const blockPage: any = db.prepare('SELECT page_id FROM blocks WHERE id = ?').get(id);
+  if (!blockPage || !pageOwnedBy(blockPage.page_id, user.id)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const updates: string[] = [];
   const params: any[] = [];
 
@@ -763,7 +1032,11 @@ app.put('/api/blocks/:id', (req, res) => {
 // back); it is then cleaned up with its page, like any file tied to a page.
 app.delete('/api/blocks/:id', (req, res) => {
   const id = req.params.id;
-  const block: any = db.prepare('SELECT type, content FROM blocks WHERE id = ?').get(id);
+  const user = res.locals.user;
+  const block: any = db.prepare('SELECT page_id, type, content FROM blocks WHERE id = ?').get(id);
+  if (!block || !pageOwnedBy(block.page_id, user.id)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   db.prepare('DELETE FROM blocks WHERE id = ?').run(id);
 
   if (req.query.keep_file === '1') return res.json({ success: true });
@@ -793,6 +1066,14 @@ app.put('/api/blocks/reorder', (req, res) => {
     .filter((b: any) => b && typeof b === 'object' && typeof b.id === 'string' && Number.isFinite(b.position))
     .map((b: any) => ({ id: b.id, position: Number(b.position) }));
 
+  const user = res.locals.user;
+  for (const b of safe) {
+    const row: any = db
+      .prepare('SELECT p.owner_user_id AS owner FROM blocks b JOIN pages p ON p.id = b.page_id WHERE b.id = ?')
+      .get(b.id);
+    if (!row || row.owner !== user.id) return res.status(404).json({ error: 'Not found' });
+  }
+
   try {
     const stmt = db.prepare('UPDATE blocks SET position = ?, updated_at = datetime(\'now\') WHERE id = ?');
     const tx = db.transaction(() => {
@@ -810,19 +1091,20 @@ app.get('/api/search', requireAuth, (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ results: [] });
 
+  const user = res.locals.user;
   const pattern = `%${q}%`;
 
   const matchedPages: any[] = db.prepare(
-    'SELECT id, title, icon, updated_at FROM pages WHERE title LIKE ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10'
-  ).all(pattern);
+    'SELECT id, title, icon, updated_at FROM pages WHERE title LIKE ? AND owner_user_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10'
+  ).all(pattern, user.id);
 
   const matchedBlocks: any[] = db.prepare(
     `SELECT b.id, b.page_id, b.content, b.type, b.updated_at, p.title as page_title, p.icon as page_icon
      FROM blocks b
      JOIN pages p ON b.page_id = p.id
-     WHERE b.content LIKE ? AND b.type NOT IN ('divider', 'subpage') AND p.deleted_at IS NULL
+     WHERE b.content LIKE ? AND b.type NOT IN ('divider', 'subpage') AND p.deleted_at IS NULL AND p.owner_user_id = ?
      ORDER BY b.updated_at DESC LIMIT 25`
-  ).all(pattern);
+  ).all(pattern, user.id);
 
   const results: any[] = [];
 
@@ -861,14 +1143,15 @@ app.get('/api/search', requireAuth, (req, res) => {
 app.get('/api/events', (req, res) => {
   const range = validateEventRange(String(req.query.from || ''), String(req.query.to || ''));
   if ('error' in range) return res.status(400).json({ error: range.error });
+  const user = res.locals.user;
   // All-day events (start_time null) sort first within their date, like
   // Google Calendar. The join fetches the whole year the UI needs in one go.
   const sql = range.value
-    ? 'SELECT * FROM events WHERE event_date >= ? AND event_date <= ? ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC'
-    : 'SELECT * FROM events ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC';
+    ? 'SELECT * FROM events WHERE owner_user_id = ? AND event_date >= ? AND event_date <= ? ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC'
+    : 'SELECT * FROM events WHERE owner_user_id = ? ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC';
   const rows = range.value
-    ? db.prepare(sql).all(range.value.from, range.value.to)
-    : db.prepare(sql).all();
+    ? db.prepare(sql).all(user.id, range.value.from, range.value.to)
+    : db.prepare(sql).all(user.id);
   res.json({ events: rows });
 });
 
@@ -876,16 +1159,18 @@ app.post('/api/events', (req, res) => {
   const v = validateEventInput(req.body);
   if ('error' in v) return res.status(400).json({ error: v.error });
   const id = crypto.randomUUID();
+  const user = res.locals.user;
   db.prepare(
-    'INSERT INTO events (id, title, event_date, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, v.value.title, v.value.event_date, v.value.start_time, v.value.end_time);
+    'INSERT INTO events (id, title, event_date, start_time, end_time, owner_user_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(id, v.value.title, v.value.event_date, v.value.start_time, v.value.end_time, user.id);
   const event = db.prepare('SELECT * FROM events WHERE id = ?').get(id);
   res.json({ event });
 });
 
 app.put('/api/events/:id', (req, res) => {
   const id = req.params.id;
-  const existing: any = db.prepare('SELECT id FROM events WHERE id = ?').get(id);
+  const user = res.locals.user;
+  const existing: any = db.prepare('SELECT id FROM events WHERE id = ? AND owner_user_id = ?').get(id, user.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   const v = validateEventInput(req.body);
   if ('error' in v) return res.status(400).json({ error: v.error });
@@ -897,7 +1182,11 @@ app.put('/api/events/:id', (req, res) => {
 });
 
 app.delete('/api/events/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
+  const id = req.params.id;
+  const user = res.locals.user;
+  const existing = db.prepare('SELECT id FROM events WHERE id = ? AND owner_user_id = ?').get(id, user.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const info = db.prepare('DELETE FROM events WHERE id = ?').run(id);
   res.json({ success: true, deleted: info.changes });
 });
 
@@ -943,8 +1232,8 @@ app.post('/api/files/upload', requireAuth, (req, res, next) => {
   fs.writeFileSync(filePath, file.buffer);
 
   db.prepare(
-    'INSERT INTO files (id, name, mime_type, size, storage, page_id) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, file.originalname.slice(0, 255), file.mimetype.slice(0, 128), file.size, 'disk', pageId);
+    'INSERT INTO files (id, name, mime_type, size, storage, page_id, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, file.originalname.slice(0, 255), file.mimetype.slice(0, 128), file.size, 'disk', pageId, res.locals.user.id);
 
   const row: any = db.prepare(
     'SELECT id, name, mime_type, size, page_id, created_at FROM files WHERE id = ?'

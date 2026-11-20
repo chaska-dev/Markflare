@@ -4,6 +4,8 @@ import type { Context } from 'hono';
 import { parseMarkdownToBlocks, blocksToMarkdown } from '../../server/shared/markdown';
 import { parseBlockProps, serializeBlockProps } from '../../server/shared/blockProps';
 import { validateEventInput, validateEventRange } from '../../server/shared/events';
+import { validateUsername, validatePassword, validateDisplayName } from '../../server/shared/users';
+import { hashPassword, verifyPassword, PBKDF2_ITERATIONS } from '../../server/shared/passwords';
 import {
   fetchLinkPreview,
   LinkPreviewError,
@@ -19,6 +21,15 @@ type Bindings = {
   AUTH_PASSWORD: string;
   AUTH_SECRET: string;
 };
+
+interface CurrentUser {
+  id: string;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+}
+
+type AppEnv = { Bindings: Bindings; Variables: { user: CurrentUser } };
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const LOGIN_RATE_WINDOW_MS = 60 * 1000; // 1-minute window
@@ -151,9 +162,8 @@ async function issueToken(
 
 async function verifyToken(
   token: string,
-  username: string,
   secret: string
-): Promise<{ ok: boolean; expired?: boolean; isApi?: boolean; tokenId?: string }> {
+): Promise<{ ok: boolean; expired?: boolean; username?: string; isApi?: boolean; tokenId?: string }> {
   const idx = token.lastIndexOf('.');
   if (idx <= 0) return { ok: false };
   const b64 = token.slice(0, idx);
@@ -169,18 +179,18 @@ async function verifyToken(
   if (!timingSafeEqual(sig, expectedSig)) return { ok: false };
   const parts = payload.split(':');
   if (parts.length < 2) return { ok: false };
-  const userPart = parts[0];
-  if (!timingSafeEqual(userPart, username)) return { ok: false };
+  const username = parts[0];
+  if (!username) return { ok: false };
   const expStr = parts[1];
   const exp = Number(expStr);
   if (!Number.isFinite(exp)) return { ok: false };
   if (Date.now() >= exp) return { ok: false, expired: true };
   const isApi = parts[2] === 'api';
   const tokenId = isApi ? parts[3] : undefined;
-  return { ok: true, isApi, tokenId };
+  return { ok: true, username, isApi, tokenId };
 }
 
-function requireEnv(c: Context<{ Bindings: Bindings }>): { username: string; password: string; secret: string } | null {
+function requireEnv(c: Context<AppEnv>): { username: string; password: string; secret: string } | null {
   const { AUTH_USERNAME, AUTH_PASSWORD, AUTH_SECRET } = c.env;
   if (!AUTH_USERNAME || !AUTH_PASSWORD || !AUTH_SECRET) {
     console.error('Auth env vars missing: AUTH_USERNAME/AUTH_PASSWORD/AUTH_SECRET must be set');
@@ -189,7 +199,7 @@ function requireEnv(c: Context<{ Bindings: Bindings }>): { username: string; pas
   return { username: AUTH_USERNAME, password: AUTH_PASSWORD, secret: AUTH_SECRET };
 }
 
-const app = new Hono<{ Bindings: Bindings }>().basePath('/api');
+const app = new Hono<AppEnv>().basePath('/api');
 
 let schemaInitialized = false;
 
@@ -248,10 +258,62 @@ async function ensureSchema(db: D1Database) {
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL DEFAULT '',
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        password_iterations INTEGER NOT NULL DEFAULT 100000,
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
     `);
     schemaInitialized = true;
   } catch (err) {
     console.error('[db] ensureSchema error:', err);
+  }
+}
+
+// Create the first admin from the env credentials when the users table is
+// still empty, then give every legacy row an owner. Runs once per isolate.
+let seedDone = false;
+
+async function ensureSeedAdmin(db: D1Database, env: Bindings): Promise<void> {
+  if (seedDone) return;
+  try {
+    const count: any = await db.prepare('SELECT COUNT(*) AS n FROM users').first();
+    if ((count?.n ?? 0) === 0) {
+      const v = validateUsername(env.AUTH_USERNAME);
+      if ('error' in v) {
+        console.error('[db] AUTH_USERNAME is not a valid username; no admin created');
+      } else {
+        const pw = await hashPassword(env.AUTH_PASSWORD);
+        await db.prepare(
+          `INSERT OR IGNORE INTO users
+             (id, username, display_name, password_hash, password_salt, password_iterations, is_admin, is_active)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, 1)`
+        ).bind(crypto.randomUUID(), v.value, v.value, pw.hash, pw.salt, pw.iterations).run();
+      }
+    }
+
+    const admin: any = await db
+      .prepare('SELECT id FROM users WHERE is_admin = 1 ORDER BY created_at ASC, id ASC LIMIT 1')
+      .first();
+    if (!admin) return;
+
+    await db.batch([
+      db.prepare('UPDATE pages SET owner_user_id = ? WHERE owner_user_id IS NULL').bind(admin.id),
+      db.prepare('UPDATE events SET owner_user_id = ? WHERE owner_user_id IS NULL').bind(admin.id),
+      db.prepare('UPDATE files SET owner_user_id = ? WHERE owner_user_id IS NULL').bind(admin.id),
+      db.prepare('UPDATE api_tokens SET user_id = ? WHERE user_id IS NULL').bind(admin.id),
+    ]);
+    seedDone = true;
+  } catch (err) {
+    console.error('[db] ensureSeedAdmin error:', err);
   }
 }
 
@@ -261,6 +323,7 @@ app.use('*', async (c, next) => {
   if (c.env?.DB) {
     await c.env.DB.exec('PRAGMA foreign_keys = ON');
     await ensureSchema(c.env.DB);
+    await ensureSeedAdmin(c.env.DB, c.env);
   }
   await next();
 });
@@ -311,16 +374,31 @@ app.post('/auth/login', async (c) => {
     return c.json({ error: 'Invalid credentials' }, 400);
   }
 
-  // Constant-time comparison for user/pass too.
-  const uOk = timingSafeEqual(username, env.username);
-  const pOk = timingSafeEqual(password, env.password);
-  if (!uOk || !pOk) {
+  const normalized = username.trim().toLowerCase();
+  const user: any = await c.env.DB
+    .prepare('SELECT * FROM users WHERE username = ? AND is_active = 1')
+    .bind(normalized)
+    .first();
+  const passwordOk = user
+    ? await verifyPassword(password, {
+        hash: user.password_hash,
+        salt: user.password_salt,
+        iterations: Number(user.password_iterations) || PBKDF2_ITERATIONS,
+      })
+    : false;
+  if (!user || !passwordOk) {
     console.warn(`auth.login failed ip=${ip}`);
     return c.json({ error: 'Invalid credentials' }, 401);
   }
 
-  const { token, expiresAt } = await issueToken(env.username, env.secret);
-  return c.json({ token, username: env.username, expiresAt });
+  const { token, expiresAt } = await issueToken(user.username, env.secret);
+  return c.json({
+    token,
+    username: user.username,
+    displayName: user.display_name || user.username,
+    isAdmin: Boolean(user.is_admin),
+    expiresAt,
+  });
 });
 
 // Public share endpoints (NO auth required).
@@ -342,7 +420,7 @@ function generateShareToken(): string {
 
 // Look up the share root by token. Returns null if the token doesn't exist
 // or the share was revoked.
-async function findShareRoot(c: Context<{ Bindings: Bindings }>, token: string): Promise<any | null> {
+async function findShareRoot(c: Context<AppEnv>, token: string): Promise<any | null> {
   const row: any = await c.env.DB
     .prepare('SELECT page_id FROM page_shares WHERE token = ? AND revoked = 0')
     .bind(token)
@@ -404,7 +482,7 @@ app.get('/share/:token/page/:pageId', async (c) => {
   }
 });
 
-const authMiddleware = async (c: Context<{ Bindings: Bindings }>, next: () => Promise<void>) => {
+const authMiddleware = async (c: Context<AppEnv>, next: () => Promise<void>) => {
   const env = requireEnv(c);
   if (!env) return c.json({ error: 'Service unavailable' }, 503);
 
@@ -415,15 +493,44 @@ const authMiddleware = async (c: Context<{ Bindings: Bindings }>, next: () => Pr
   const token = authHeader.slice('Bearer '.length).trim();
   if (!token) return c.json({ error: 'Unauthorized' }, 401);
 
-  const v = await verifyToken(token, env.username, env.secret);
-  if (!v.ok) {
+  const v = await verifyToken(token, env.secret);
+  if (!v.ok || !v.username) {
     return c.json({ error: v.expired ? 'Session expired' : 'Unauthorized' }, 401);
   }
+
+  const user: any = await c.env.DB
+    .prepare('SELECT id, username, display_name, is_admin, is_active FROM users WHERE username = ?')
+    .bind(v.username.toLowerCase())
+    .first();
+  if (!user || !user.is_active) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
   if (v.isApi && v.tokenId) {
-    const row = await c.env.DB.prepare('SELECT id FROM api_tokens WHERE id = ?').bind(v.tokenId).first();
-    if (!row) {
+    const apiToken: any = await c.env.DB
+      .prepare('SELECT id, user_id FROM api_tokens WHERE id = ?')
+      .bind(v.tokenId)
+      .first();
+    if (!apiToken) {
       return c.json({ error: 'Token has been revoked' }, 401);
     }
+    if (apiToken.user_id !== user.id) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+  }
+
+  c.set('user', {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name || user.username,
+    isAdmin: Boolean(user.is_admin),
+  });
+  await next();
+};
+
+const adminMiddleware = async (c: Context<AppEnv>, next: () => Promise<void>) => {
+  if (!c.get('user')?.isAdmin) {
+    return c.json({ error: 'Forbidden' }, 403);
   }
   await next();
 };
@@ -437,12 +544,17 @@ app.use('/link-preview', authMiddleware);
 app.use('/auth/token', authMiddleware);
 app.use('/auth/tokens', authMiddleware);
 app.use('/auth/tokens/*', authMiddleware);
+app.use('/auth/me', authMiddleware);
+app.use('/auth/password', authMiddleware);
+app.use('/admin/*', authMiddleware);
+app.use('/admin/*', adminMiddleware);
 app.use('/events', authMiddleware);
 app.use('/events/*', authMiddleware);
 
 app.post('/auth/token', async (c) => {
   const env = requireEnv(c);
   if (!env) return c.json({ error: 'Service unavailable' }, 503);
+  const user = c.get('user');
   let body: any = {};
   try {
     body = await c.req.json();
@@ -453,13 +565,18 @@ app.post('/auth/token', async (c) => {
   const expiresInDays = Number(body?.expiresInDays) || 365;
   const ttlMs = expiresInDays * 24 * 60 * 60 * 1000;
   const id = crypto.randomUUID();
-  const { token, expiresAt } = await issueToken(env.username, env.secret, ttlMs, id);
-  await c.env.DB.prepare('INSERT INTO api_tokens (id, name, token, expires_at) VALUES (?, ?, ?, ?)').bind(id, name, token, expiresAt).run();
+  const { token, expiresAt } = await issueToken(user.username, env.secret, ttlMs, id);
+  await c.env.DB.prepare('INSERT INTO api_tokens (id, name, token, expires_at, user_id) VALUES (?, ?, ?, ?, ?)')
+    .bind(id, name, token, expiresAt, user.id).run();
   return c.json({ id, name, token, expiresAt, createdAt: new Date().toISOString() });
 });
 
 app.get('/auth/tokens', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT id, name, token, created_at, expires_at FROM api_tokens ORDER BY created_at DESC').all();
+  const user = c.get('user');
+  const { results } = await c.env.DB
+    .prepare('SELECT id, name, token, created_at, expires_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC')
+    .bind(user.id)
+    .all();
   const tokens = (results || []).map((r: any) => ({
     id: r.id,
     name: r.name,
@@ -472,9 +589,184 @@ app.get('/auth/tokens', async (c) => {
 
 app.delete('/auth/tokens/:id', async (c) => {
   const id = c.req.param('id');
-  await c.env.DB.prepare('DELETE FROM api_tokens WHERE id = ?').bind(id).run();
+  const user = c.get('user');
+  await c.env.DB.prepare('DELETE FROM api_tokens WHERE id = ? AND user_id = ?').bind(id, user.id).run();
   return c.json({ success: true, id });
 });
+
+app.get('/auth/me', async (c) => {
+  const user = c.get('user');
+  return c.json({
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    isAdmin: user.isAdmin,
+  });
+});
+
+app.post('/auth/password', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => null);
+  const b = (body || {}) as Record<string, unknown>;
+  if (typeof b.currentPassword !== 'string' || typeof b.newPassword !== 'string') {
+    return c.json({ error: 'Invalid body' }, 400);
+  }
+  const row: any = await c.env.DB
+    .prepare('SELECT password_hash, password_salt, password_iterations FROM users WHERE id = ?')
+    .bind(user.id)
+    .first();
+  if (!row) return c.json({ error: 'Unauthorized' }, 401);
+  const ok = await verifyPassword(b.currentPassword, {
+    hash: row.password_hash,
+    salt: row.password_salt,
+    iterations: Number(row.password_iterations) || PBKDF2_ITERATIONS,
+  });
+  if (!ok) return c.json({ error: 'Current password is incorrect' }, 400);
+
+  const v = validatePassword(b.newPassword);
+  if ('error' in v) return c.json({ error: v.error }, 400);
+
+  const pw = await hashPassword(v.value);
+  await c.env.DB.prepare(
+    `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(pw.hash, pw.salt, pw.iterations, user.id).run();
+  return c.json({ success: true });
+});
+
+// Admin account management. Admins manage accounts only — they never get a
+// route that returns another user's pages, events or files.
+function toAdminUser(r: any) {
+  return {
+    id: r.id,
+    username: r.username,
+    displayName: r.display_name || r.username,
+    isAdmin: Boolean(r.is_admin),
+    isActive: Boolean(r.is_active),
+    createdAt: r.created_at,
+  };
+}
+
+app.get('/admin/users', async (c) => {
+  const { results } = await c.env.DB
+    .prepare('SELECT id, username, display_name, is_admin, is_active, created_at FROM users ORDER BY created_at ASC, id ASC')
+    .all();
+  return c.json({ users: (results || []).map(toAdminUser) });
+});
+
+app.post('/admin/users', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const b = (body || {}) as Record<string, unknown>;
+
+  const uv = validateUsername(b.username);
+  if ('error' in uv) return c.json({ error: uv.error }, 400);
+  const pv = validatePassword(b.password);
+  if ('error' in pv) return c.json({ error: pv.error }, 400);
+  const dv = validateDisplayName(b.displayName, uv.value);
+  if ('error' in dv) return c.json({ error: dv.error }, 400);
+
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(uv.value).first();
+  if (existing) return c.json({ error: 'Username already exists' }, 409);
+
+  const id = crypto.randomUUID();
+  const pw = await hashPassword(pv.value);
+  await c.env.DB.prepare(
+    `INSERT INTO users (id, username, display_name, password_hash, password_salt, password_iterations, is_admin, is_active)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)`
+  ).bind(id, uv.value, dv.value, pw.hash, pw.salt, pw.iterations, b.isAdmin === true ? 1 : 0).run();
+
+  const row: any = await c.env.DB
+    .prepare('SELECT id, username, display_name, is_admin, is_active, created_at FROM users WHERE id = ?')
+    .bind(id)
+    .first();
+  return c.json({ user: toAdminUser(row) });
+});
+
+app.patch('/admin/users/:id', async (c) => {
+  const id = c.req.param('id');
+  const current = c.get('user');
+  const body = await c.req.json().catch(() => null);
+  const b = (body || {}) as Record<string, unknown>;
+
+  const existing: any = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first();
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+
+  if (id === current.id && b.isActive === false) {
+    return c.json({ error: 'You cannot deactivate your own account' }, 400);
+  }
+  if (id === current.id && b.isAdmin === false) {
+    return c.json({ error: 'You cannot remove your own admin role' }, 400);
+  }
+
+  const wasActiveAdmin = Boolean(existing.is_admin) && Boolean(existing.is_active);
+  const losesAdmin = b.isActive === false || b.isAdmin === false;
+  if (wasActiveAdmin && losesAdmin) {
+    const others: any = await c.env.DB
+      .prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND is_active = 1 AND id != ?')
+      .bind(id)
+      .first();
+    if ((others?.n ?? 0) === 0) {
+      return c.json({ error: 'At least one active admin is required' }, 400);
+    }
+  }
+
+  const updates: string[] = [];
+  const params: any[] = [];
+  if (b.displayName !== undefined) {
+    const dv = validateDisplayName(b.displayName, existing.username);
+    if ('error' in dv) return c.json({ error: dv.error }, 400);
+    updates.push('display_name = ?');
+    params.push(dv.value);
+  }
+  if (typeof b.isActive === 'boolean') {
+    updates.push('is_active = ?');
+    params.push(b.isActive ? 1 : 0);
+  }
+  if (typeof b.isAdmin === 'boolean') {
+    updates.push('is_admin = ?');
+    params.push(b.isAdmin ? 1 : 0);
+  }
+
+  if (updates.length > 0) {
+    updates.push(`updated_at = datetime('now')`);
+    params.push(id);
+    await c.env.DB.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).bind(...params).run();
+  }
+
+  const row: any = await c.env.DB
+    .prepare('SELECT id, username, display_name, is_admin, is_active, created_at FROM users WHERE id = ?')
+    .bind(id)
+    .first();
+  return c.json({ user: toAdminUser(row) });
+});
+
+app.post('/admin/users/:id/reset-password', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => null);
+  const b = (body || {}) as Record<string, unknown>;
+
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(id).first();
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+
+  const pv = validatePassword(b.newPassword);
+  if ('error' in pv) return c.json({ error: pv.error }, 400);
+
+  const pw = await hashPassword(pv.value);
+  await c.env.DB.prepare(
+    `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(pw.hash, pw.salt, pw.iterations, id).run();
+  return c.json({ success: true });
+});
+
+// The single ownership check for page-scoped actions (plan-00 §3.7). A missing
+// page and someone else's page are both "not owned", which callers turn into
+// a 404 so the existence of other users' data never leaks.
+async function pageOwnedBy(db: D1Database, pageId: string, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT owner_user_id FROM pages WHERE id = ?')
+    .bind(pageId)
+    .first<{ owner_user_id: string | null }>();
+  return !!row && row.owner_user_id === userId;
+}
 
 // Share management (auth-gated) — endpoints for the page owner to create,
 // query, and deactivate the page's public link. Each page has at most ONE
@@ -485,8 +777,11 @@ app.delete('/auth/tokens/:id', async (c) => {
 app.post('/pages/:id/share', async (c) => {
   try {
     const pageId = c.req.param('id');
+    const user = c.get('user');
     const page: any = await c.env.DB.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').bind(pageId).first();
-    if (!page) return c.json({ error: 'Page not found' }, 404);
+    if (!page || !(await pageOwnedBy(c.env.DB, pageId, user.id))) {
+      return c.json({ error: 'Page not found' }, 404);
+    }
 
     const existing: any = await c.env.DB
       .prepare('SELECT token, revoked FROM page_shares WHERE page_id = ?')
@@ -514,6 +809,10 @@ app.post('/pages/:id/share', async (c) => {
 app.get('/pages/:id/share', async (c) => {
   try {
     const pageId = c.req.param('id');
+    const user = c.get('user');
+    if (!(await pageOwnedBy(c.env.DB, pageId, user.id))) {
+      return c.json({ error: 'Not found' }, 404);
+    }
     const row: any = await c.env.DB
       .prepare('SELECT token, revoked, created_at FROM page_shares WHERE page_id = ? AND revoked = 0')
       .bind(pageId)
@@ -531,6 +830,10 @@ app.get('/pages/:id/share', async (c) => {
 app.delete('/pages/:id/share', async (c) => {
   try {
     const pageId = c.req.param('id');
+    const user = c.get('user');
+    if (!(await pageOwnedBy(c.env.DB, pageId, user.id))) {
+      return c.json({ error: 'Not found' }, 404);
+    }
     const result = await c.env.DB.prepare('UPDATE page_shares SET revoked = 1 WHERE page_id = ?').bind(pageId).run();
     return c.json({ success: true, changed: (result as any).meta?.changes ?? 0 });
   } catch (err: any) {
@@ -541,9 +844,10 @@ app.delete('/pages/:id/share', async (c) => {
 
 // 1. GET /api/pages
 app.get('/pages', async (c) => {
+  const user = c.get('user');
   const { results } = await c.env.DB.prepare(
-    'SELECT * FROM pages WHERE deleted_at IS NULL ORDER BY position ASC, created_at DESC'
-  ).all();
+    'SELECT * FROM pages WHERE owner_user_id = ? AND deleted_at IS NULL ORDER BY position ASC, created_at DESC'
+  ).bind(user.id).all();
   return c.json({ pages: results.map(normalizePage) });
 });
 
@@ -566,7 +870,7 @@ const TRASH_RETENTION_DAYS = 30;
 // trashed together with its parent comes back with it, so it has no row of its
 // own.
 const TRASH_ROOTS_SQL = `SELECT id, title, icon, parent_id, deleted_at FROM pages p
-  WHERE p.deleted_at IS NOT NULL
+  WHERE p.deleted_at IS NOT NULL AND p.owner_user_id = ?
     AND (p.parent_id IS NULL
          OR NOT EXISTS (SELECT 1 FROM pages pp WHERE pp.id = p.parent_id AND pp.deleted_at IS NOT NULL))`;
 
@@ -649,23 +953,26 @@ async function purgePages(
 // GET /api/pages/trash — also purges roots trashed longer than the retention
 // window, so no cron is needed.
 app.get('/pages/trash', async (c) => {
+  const user = c.get('user');
   const cutoff = sqlTimestamp(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const { results: expired } = await c.env.DB
     .prepare(`${TRASH_ROOTS_SQL} AND p.deleted_at < ?`)
-    .bind(cutoff)
+    .bind(user.id, cutoff)
     .all<{ id: string }>();
   for (const root of expired) {
     await purgePages(c.env.DB, c.env.BUCKET, await collectDescendantPageIds(c, root.id));
   }
 
-  const { results } = await c.env.DB.prepare(`${TRASH_ROOTS_SQL} ORDER BY p.deleted_at DESC`).all();
+  const { results } = await c.env.DB.prepare(`${TRASH_ROOTS_SQL} ORDER BY p.deleted_at DESC`).bind(user.id).all();
   return c.json({ pages: results });
 });
 
 // DELETE /api/pages/trash — empty the trash (permanent).
 app.delete('/pages/trash', async (c) => {
+  const user = c.get('user');
   const { results } = await c.env.DB
-    .prepare('SELECT id FROM pages WHERE deleted_at IS NOT NULL')
+    .prepare('SELECT id FROM pages WHERE deleted_at IS NOT NULL AND owner_user_id = ?')
+    .bind(user.id)
     .all<{ id: string }>();
   const ids = results.map(r => r.id);
   const { deletedFiles } = await purgePages(c.env.DB, c.env.BUCKET, ids);
@@ -677,6 +984,8 @@ app.delete('/pages/trash', async (c) => {
 // Trash (or gone) the page returns at the workspace root instead.
 app.post('/pages/:id/restore', async (c) => {
   const id = c.req.param('id');
+  const user = c.get('user');
+  if (!(await pageOwnedBy(c.env.DB, id, user.id))) return c.json({ error: 'Not found' }, 404);
   const page: any = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(id).first();
   if (!page) return c.json({ error: 'Not found' }, 404);
   if (!page.deleted_at) return c.json({ page: normalizePage(page), restoredPages: 0 });
@@ -704,11 +1013,12 @@ app.post('/pages/:id/restore', async (c) => {
 // block and page delete paths only remove a file once nothing references it.
 app.post('/pages/:id/duplicate', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user');
   const src: any = await db
     .prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL')
     .bind(c.req.param('id'))
     .first();
-  if (!src) return c.json({ error: 'Not found' }, 404);
+  if (!src || !(await pageOwnedBy(db, src.id, user.id))) return c.json({ error: 'Not found' }, 404);
 
   const next: any = await db
     .prepare('SELECT MIN(position) AS pos FROM pages WHERE parent_id IS ?1 AND deleted_at IS NULL AND position > ?2')
@@ -730,9 +1040,9 @@ app.post('/pages/:id/duplicate', async (c) => {
   // Page first, so the blocks' page_id FK is satisfied in every later slice.
   const stmts: D1PreparedStatement[] = [
     db.prepare(
-      `INSERT INTO pages (id, title, icon, parent_id, position, cover, full_width, is_project)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
-    ).bind(newId, title, src.icon, src.parent_id ?? null, position, src.cover ?? null, src.full_width, src.is_project),
+      `INSERT INTO pages (id, title, icon, parent_id, position, cover, full_width, is_project, owner_user_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+    ).bind(newId, title, src.icon, src.parent_id ?? null, position, src.cover ?? null, src.full_width, src.is_project, user.id),
   ];
   for (const b of blocks) {
     stmts.push(
@@ -764,6 +1074,7 @@ app.post('/pages/:id/duplicate', async (c) => {
 // 2. POST /api/pages
 app.post('/pages', async (c) => {
   const body = await c.req.json();
+  const user = c.get('user');
   const id = crypto.randomUUID();
   const title = typeof body.title === 'string' ? body.title.slice(0, 500) : 'Untitled';
   const icon = typeof body.icon === 'string' ? body.icon.slice(0, 32) : '📄';
@@ -771,8 +1082,8 @@ app.post('/pages', async (c) => {
   const position = Number.isFinite(body.position) ? Number(body.position) : 0;
 
   await c.env.DB.prepare(
-    'INSERT INTO pages (id, title, icon, parent_id, position) VALUES (?1, ?2, ?3, ?4, ?5)'
-  ).bind(id, title, icon, parent_id, position).run();
+    'INSERT INTO pages (id, title, icon, parent_id, position, owner_user_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)'
+  ).bind(id, title, icon, parent_id, position, user.id).run();
 
   const blockId = crypto.randomUUID();
   await c.env.DB.prepare(
@@ -786,6 +1097,7 @@ app.post('/pages', async (c) => {
 // 2.5 POST /api/pages/import
 app.post('/pages/import', async (c) => {
   const body = await c.req.json();
+  const user = c.get('user');
   const { markdown, title, parent_id } = body as { markdown?: unknown; title?: unknown; parent_id?: unknown };
   const id = crypto.randomUUID();
   const icon = '📄';
@@ -801,8 +1113,8 @@ app.post('/pages/import', async (c) => {
   const pageTitle = detectedTitle || safeTitle || 'Imported';
 
   await c.env.DB.prepare(
-    'INSERT INTO pages (id, title, icon, parent_id, position) VALUES (?1, ?2, ?3, ?4, 0)'
-  ).bind(id, pageTitle, icon, safeParent).run();
+    'INSERT INTO pages (id, title, icon, parent_id, position, owner_user_id) VALUES (?1, ?2, ?3, ?4, 0, ?5)'
+  ).bind(id, pageTitle, icon, safeParent, user.id).run();
 
   const statements = blocks.map((block, index) => {
     return c.env.DB.prepare(
@@ -829,9 +1141,10 @@ app.post('/pages/import', async (c) => {
 // uses that to show the "in Trash" banner for a page opened by URL.
 app.get('/pages/:id', async (c) => {
   const id = c.req.param('id');
+  const user = c.get('user');
   const page: any = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(id).first();
 
-  if (!page || (page.deleted_at && c.req.query('include_trashed') !== '1')) {
+  if (!page || !(await pageOwnedBy(c.env.DB, id, user.id)) || (page.deleted_at && c.req.query('include_trashed') !== '1')) {
     return c.json({ error: 'Not found' }, 404);
   }
 
@@ -845,8 +1158,9 @@ app.get('/pages/:id', async (c) => {
 // 3.5 GET /api/pages/:id/export
 app.get('/pages/:id/export', async (c) => {
   const id = c.req.param('id');
+  const user = c.get('user');
   const page: any = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ? AND deleted_at IS NULL').bind(id).first();
-  if (!page) return c.json({ error: 'Not found' }, 404);
+  if (!page || !(await pageOwnedBy(c.env.DB, id, user.id))) return c.json({ error: 'Not found' }, 404);
 
   const { results: blocks } = await c.env.DB.prepare(
     'SELECT * FROM blocks WHERE page_id = ? ORDER BY position ASC'
@@ -860,10 +1174,11 @@ app.get('/pages/:id/export', async (c) => {
 // 4. PUT /api/pages/:id
 app.put('/pages/:id', async (c) => {
   const id = c.req.param('id');
+  const user = c.get('user');
   const body = await c.req.json();
   // Pages in Trash are read-only until restored.
   const existing: any = await c.env.DB.prepare('SELECT deleted_at FROM pages WHERE id = ?').bind(id).first();
-  if (!existing || existing.deleted_at) return c.json({ error: 'Not found' }, 404);
+  if (!existing || !(await pageOwnedBy(c.env.DB, id, user.id)) || existing.deleted_at) return c.json({ error: 'Not found' }, 404);
 
   const updates: string[] = [];
   const params: any[] = [];
@@ -900,6 +1215,8 @@ app.put('/pages/:id', async (c) => {
 // timestamp, so restoring this page does not resurrect them.
 app.delete('/pages/:id', async (c) => {
   const id = c.req.param('id');
+  const user = c.get('user');
+  if (!(await pageOwnedBy(c.env.DB, id, user.id))) return c.json({ error: 'Not found' }, 404);
   const pageIds = await collectDescendantPageIds(c, id);
   const now = sqlTimestamp();
   const stmts = pageIds.map(pid =>
@@ -916,6 +1233,8 @@ app.delete('/pages/:id', async (c) => {
 // 5a. DELETE /api/pages/:id/permanent — the real, irreversible delete
 // (cascade: subpages, blocks and their files).
 app.delete('/pages/:id/permanent', async (c) => {
+  const user = c.get('user');
+  if (!(await pageOwnedBy(c.env.DB, c.req.param('id'), user.id))) return c.json({ error: 'Not found' }, 404);
   const pageIds = await collectDescendantPageIds(c, c.req.param('id'));
   const { deletedFiles } = await purgePages(c.env.DB, c.env.BUCKET, pageIds);
   return c.json({ success: true, deletedPages: pageIds.length, deletedFiles });
@@ -924,6 +1243,8 @@ app.delete('/pages/:id/permanent', async (c) => {
 // 5b. GET /api/pages/:id/cascade-count
 app.get('/pages/:id/cascade-count', async (c) => {
   const id = c.req.param('id');
+  const user = c.get('user');
+  if (!(await pageOwnedBy(c.env.DB, id, user.id))) return c.json({ error: 'Not found' }, 404);
   const pageIds = await collectDescendantPageIds(c, id);
   if (pageIds.length === 0) return c.json({ pages: 0, blocks: 0 });
   const placeholders = pageIds.map(() => '?').join(',');
@@ -937,7 +1258,7 @@ app.get('/pages/:id/cascade-count', async (c) => {
 // BFS over parent_id to collect all descendants (including the root).
 // `liveOnly` skips subtrees in Trash, so a public share link never exposes them.
 async function collectDescendantPageIds(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<AppEnv>,
   rootId: string,
   liveOnly = false
 ): Promise<string[]> {
@@ -978,8 +1299,11 @@ async function selectIn(db: D1Database, sqlPrefix: string, ids: string[]): Promi
 app.post('/pages/:pageId/blocks', async (c) => {
   const pageId = c.req.param('pageId');
   const body = await c.req.json();
-  const owner = await c.env.DB.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').bind(pageId).first();
-  if (!owner) return c.json({ error: 'Page not found' }, 404);
+  const user = c.get('user');
+  const page = await c.env.DB.prepare('SELECT id FROM pages WHERE id = ? AND deleted_at IS NULL').bind(pageId).first();
+  if (!page || !(await pageOwnedBy(c.env.DB, pageId, user.id))) {
+    return c.json({ error: 'Page not found' }, 404);
+  }
   const id = crypto.randomUUID();
 
   const type = typeof body.type === 'string' ? body.type.slice(0, 32) : 'paragraph';
@@ -1014,7 +1338,12 @@ app.post('/pages/:pageId/blocks', async (c) => {
 app.put('/blocks/:id', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json();
-  
+  const user = c.get('user');
+  const blockPage: any = await c.env.DB.prepare('SELECT page_id FROM blocks WHERE id = ?').bind(id).first();
+  if (!blockPage || !(await pageOwnedBy(c.env.DB, blockPage.page_id, user.id))) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
   const updates: string[] = [];
   const params: any[] = [];
   let index = 1;
@@ -1075,7 +1404,11 @@ app.put('/blocks/:id', async (c) => {
 // back); it is then cleaned up with its page, like any file tied to a page.
 app.delete('/blocks/:id', async (c) => {
   const id = c.req.param('id');
-  const block: any = await c.env.DB.prepare('SELECT type, content FROM blocks WHERE id = ?').bind(id).first();
+  const user = c.get('user');
+  const block: any = await c.env.DB.prepare('SELECT page_id, type, content FROM blocks WHERE id = ?').bind(id).first();
+  if (!block || !(await pageOwnedBy(c.env.DB, block.page_id, user.id))) {
+    return c.json({ error: 'Not found' }, 404);
+  }
   await c.env.DB.prepare('DELETE FROM blocks WHERE id = ?').bind(id).run();
 
   if (c.req.query('keep_file') === '1') return c.json({ success: true });
@@ -1104,6 +1437,25 @@ app.put('/blocks/reorder', async (c) => {
   const safe = blocks
     .filter(b => b && typeof b === 'object' && typeof b.id === 'string' && Number.isFinite(b.position))
     .map(b => ({ id: b.id as string, position: Number(b.position) }));
+
+  const user = c.get('user');
+  const ids = safe.map(b => b.id);
+  const owners = new Map<string, string | null>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const slice = ids.slice(i, i + 50);
+    const { results } = await c.env.DB
+      .prepare(
+        `SELECT b.id, p.owner_user_id AS owner
+         FROM blocks b JOIN pages p ON p.id = b.page_id
+         WHERE b.id IN (${slice.map(() => '?').join(',')})`
+      )
+      .bind(...slice)
+      .all<{ id: string; owner: string | null }>();
+    for (const row of results || []) owners.set(row.id, row.owner);
+  }
+  for (const id of ids) {
+    if (owners.get(id) !== user.id) return c.json({ error: 'Not found' }, 404);
+  }
   
   try {
     const statements = safe.map(block => 
@@ -1125,19 +1477,20 @@ app.get('/search', async (c) => {
   const q = (c.req.query('q') || '').trim();
   if (!q) return c.json({ results: [] });
 
+  const user = c.get('user');
   const pattern = `%${q}%`;
 
   const { results: matchedPages } = await c.env.DB.prepare(
-    'SELECT id, title, icon, updated_at FROM pages WHERE title LIKE ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10'
-  ).bind(pattern).all();
+    'SELECT id, title, icon, updated_at FROM pages WHERE title LIKE ? AND owner_user_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 10'
+  ).bind(pattern, user.id).all();
 
   const { results: matchedBlocks } = await c.env.DB.prepare(
     `SELECT b.id, b.page_id, b.content, b.type, b.updated_at, p.title as page_title, p.icon as page_icon
      FROM blocks b
      JOIN pages p ON b.page_id = p.id
-     WHERE b.content LIKE ? AND b.type NOT IN ('divider', 'subpage') AND p.deleted_at IS NULL
+     WHERE b.content LIKE ? AND b.type NOT IN ('divider', 'subpage') AND p.deleted_at IS NULL AND p.owner_user_id = ?
      ORDER BY b.updated_at DESC LIMIT 25`
-  ).bind(pattern).all();
+  ).bind(pattern, user.id).all();
 
   const results: any[] = [];
 
@@ -1176,12 +1529,13 @@ app.get('/search', async (c) => {
 app.get('/events', async (c) => {
   const range = validateEventRange(c.req.query('from') || '', c.req.query('to') || '');
   if ('error' in range) return c.json({ error: range.error }, 400);
+  const user = c.get('user');
   const order = 'ORDER BY event_date ASC, (start_time IS NULL) DESC, start_time ASC, id ASC';
   const stmt = range.value
     ? c.env.DB.prepare(
-        `SELECT * FROM events WHERE event_date >= ? AND event_date <= ? ${order}`
-      ).bind(range.value.from, range.value.to)
-    : c.env.DB.prepare(`SELECT * FROM events ${order}`);
+        `SELECT * FROM events WHERE owner_user_id = ? AND event_date >= ? AND event_date <= ? ${order}`
+      ).bind(user.id, range.value.from, range.value.to)
+    : c.env.DB.prepare(`SELECT * FROM events WHERE owner_user_id = ? ${order}`).bind(user.id);
   const { results } = await stmt.all();
   return c.json({ events: results || [] });
 });
@@ -1191,16 +1545,18 @@ app.post('/events', async (c) => {
   const v = validateEventInput(body);
   if ('error' in v) return c.json({ error: v.error }, 400);
   const id = crypto.randomUUID();
+  const user = c.get('user');
   await c.env.DB.prepare(
-    'INSERT INTO events (id, title, event_date, start_time, end_time) VALUES (?, ?, ?, ?, ?)'
-  ).bind(id, v.value.title, v.value.event_date, v.value.start_time, v.value.end_time).run();
+    'INSERT INTO events (id, title, event_date, start_time, end_time, owner_user_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, v.value.title, v.value.event_date, v.value.start_time, v.value.end_time, user.id).run();
   const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(id).first();
   return c.json({ event });
 });
 
 app.put('/events/:id', async (c) => {
   const id = c.req.param('id');
-  const existing = await c.env.DB.prepare('SELECT id FROM events WHERE id = ?').bind(id).first();
+  const user = c.get('user');
+  const existing = await c.env.DB.prepare('SELECT id FROM events WHERE id = ? AND owner_user_id = ?').bind(id, user.id).first();
   if (!existing) return c.json({ error: 'Not found' }, 404);
   const body = await c.req.json().catch(() => null);
   const v = validateEventInput(body);
@@ -1213,7 +1569,11 @@ app.put('/events/:id', async (c) => {
 });
 
 app.delete('/events/:id', async (c) => {
-  const { meta } = await c.env.DB.prepare('DELETE FROM events WHERE id = ?').bind(c.req.param('id')).run();
+  const id = c.req.param('id');
+  const user = c.get('user');
+  const existing = await c.env.DB.prepare('SELECT id FROM events WHERE id = ? AND owner_user_id = ?').bind(id, user.id).first();
+  if (!existing) return c.json({ error: 'Not found' }, 404);
+  const { meta } = await c.env.DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
   return c.json({ success: true, deleted: meta.changes });
 });
 
@@ -1244,8 +1604,8 @@ app.post('/files/upload', async (c) => {
   });
 
   await c.env.DB.prepare(
-    'INSERT INTO files (id, name, mime_type, size, storage, page_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)'
-  ).bind(id, file.name.slice(0, 255), (file.type || 'application/octet-stream').slice(0, 128), file.size, 'r2', pageId || null).run();
+    'INSERT INTO files (id, name, mime_type, size, storage, page_id, owner_user_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+  ).bind(id, file.name.slice(0, 255), (file.type || 'application/octet-stream').slice(0, 128), file.size, 'r2', pageId || null, c.get('user').id).run();
 
   const newFile: any = await c.env.DB.prepare('SELECT id, name, mime_type, size, page_id, created_at FROM files WHERE id = ?').bind(id).first();
   newFile.url = `/api/files/${id}`;

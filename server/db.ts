@@ -89,6 +89,11 @@ const EXPECTED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: 'pages', column: 'is_project', ddl: 'is_project INTEGER NOT NULL DEFAULT 0' },
   { table: 'pages', column: 'cover', ddl: 'cover TEXT' },
   { table: 'blocks', column: 'props', ddl: "props TEXT NOT NULL DEFAULT '{}'" },
+  // Phase 1: every row belongs to an account. Filled by ensureSeedAdmin.
+  { table: 'pages', column: 'owner_user_id', ddl: 'owner_user_id TEXT' },
+  { table: 'events', column: 'owner_user_id', ddl: 'owner_user_id TEXT' },
+  { table: 'files', column: 'owner_user_id', ddl: 'owner_user_id TEXT' },
+  { table: 'api_tokens', column: 'user_id', ddl: 'user_id TEXT' },
 ];
 
 function healSchema(): void {
@@ -102,6 +107,10 @@ function healSchema(): void {
   }
   // The index from 0006 is lost if that file was skipped on a duplicate column.
   db.exec('CREATE INDEX IF NOT EXISTS idx_pages_deleted_at ON pages(deleted_at)');
+  // Owner indexes from 0009, same reason.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pages_owner ON pages(owner_user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_events_owner ON events(owner_user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id)');
 }
 
 // Helper: converts the 0/1 flags SQLite stores on a page into booleans, so the

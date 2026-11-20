@@ -75,9 +75,8 @@ export async function issueToken(
 
 export async function verifyToken(
   token: string,
-  username: string,
   secret: string
-): Promise<{ ok: boolean; expired?: boolean; isApi?: boolean; tokenId?: string }> {
+): Promise<{ ok: boolean; expired?: boolean; username?: string; isApi?: boolean; tokenId?: string }> {
   const idx = token.lastIndexOf('.');
   if (idx <= 0) return { ok: false };
   const b64 = token.slice(0, idx);
@@ -92,15 +91,15 @@ export async function verifyToken(
   if (!timingSafeEqual(sig, expectedSig)) return { ok: false };
   const parts = payload.split(':');
   if (parts.length < 2) return { ok: false };
-  const userPart = parts[0];
-  if (!timingSafeEqual(userPart, username)) return { ok: false };
+  const username = parts[0];
+  if (!username) return { ok: false };
   const expStr = parts[1];
   const exp = Number(expStr);
   if (!Number.isFinite(exp)) return { ok: false };
   if (Date.now() >= exp) return { ok: false, expired: true };
   const isApi = parts[2] === 'api';
   const tokenId = isApi ? parts[3] : undefined;
-  return { ok: true, isApi, tokenId };
+  return { ok: true, username, isApi, tokenId };
 }
 
 // In-memory per-IP rate limit. Workers (Cloudflare) don't share state across

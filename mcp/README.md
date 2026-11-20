@@ -28,6 +28,11 @@ You can generate a token in two ways:
    pnpm run mcp:token
    ```
 
+Each family member uses their own API token, created from their own account
+under **Profile → API / MCP Token**. A token only grants access to the data
+owned by the account that created it; use `PARASTI_API_TOKEN` instead of
+sharing one username and password.
+
 ---
 
 ## Available Tools
