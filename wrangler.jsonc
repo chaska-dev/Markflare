@@ -12,8 +12,7 @@
     {
       "binding": "DB",
       "database_name": "parasti-db",
-      // TODO(Roki): ganti dengan database_id nyata dari `wrangler d1 create parasti-db`
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "67f8cb91-795f-4e08-9bc9-0596215a21de"
     }
   ],
   "r2_buckets": [
