@@ -9,6 +9,8 @@ It allows any LLM or AI agent to:
 - Search across existing pages and blocks in Parasti.
 - Inspect page details and ordered blocks by page ID.
 
+Beyond pages, this server can also write your calendar and create projects: it creates, lists, updates, and deletes events, and it builds project roots with nested sub-pages, not only standalone pages.
+
 ---
 
 ## Authentication: Generating an API Token
@@ -44,6 +46,13 @@ sharing one username and password.
 | `list_pages` | *(none)* | Returns the workspace page hierarchy with icon, title, ID, and relationship (`root` or `parent`). |
 | `search_pages` | `query` *(string, required)* | Searches for text within all pages and blocks. |
 | `get_page` | `pageId` *(string, required)* | Retrieves the full page object and all ordered blocks. |
+| `create_event` | `title` *(string, required)*<br>`event_date` *(string, required, `YYYY-MM-DD`)*<br>`start_time` *(string, optional, `HH:MM`)*<br>`end_time` *(string, optional, `HH:MM`)* | Creates a calendar event. Omit both times for an all-day event. |
+| `list_events` | `from` *(string, optional, `YYYY-MM-DD`)*<br>`to` *(string, optional, `YYYY-MM-DD`)* | Lists events, optionally restricted to an inclusive date range. Provide both bounds or neither. |
+| `update_event` | `eventId` *(string, required)*<br>`title` *(string, required)*<br>`event_date` *(string, required, `YYYY-MM-DD`)*<br>`start_time` *(string, optional, `HH:MM`)*<br>`end_time` *(string, optional, `HH:MM`)* | Replaces an event. All fields must be supplied; this is not a partial update. |
+| `delete_event` | `eventId` *(string, required)* | Permanently deletes an event. Destructive: only call after the user confirms. |
+| `create_project` | `title` *(string, required)*<br>`icon` *(string, optional, max 32 chars)* | Creates a root page flagged as a project. |
+| `list_projects` | *(none)* | Lists projects (root pages with `is_project`). |
+| `create_page` | `title` *(string, required)*<br>`icon` *(string, optional, max 32 chars)*<br>`parentId` *(string, optional)* | Creates an empty page, optionally nested under a project or private page. |
 
 ---
 

@@ -229,8 +229,9 @@ server.tool(
 
       const lines = pages.map((p) => {
         const icon = p.icon || '📄';
+        const projectTag = p.is_project ? ' [project]' : '';
         const parentInfo = p.parent_id ? ` (parent: ${p.parent_id})` : ' (root)';
-        return `- ${icon} [${p.title}] (ID: ${p.id})${parentInfo}`;
+        return `- ${icon} [${p.title}] (ID: ${p.id})${projectTag}${parentInfo}`;
       });
 
       return {
@@ -311,6 +312,329 @@ server.tool(
       return {
         isError: true,
         content: [{ type: 'text', text: `Failed to get page: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: create_event
+server.tool(
+  'create_event',
+  'Create a calendar event in Parasti. Times are wall-clock HH:MM strings; omit both for an all-day event.',
+  {
+    title: z.string().describe('Event title'),
+    event_date: z.string().describe('Event date in YYYY-MM-DD format'),
+    start_time: z.string().optional().describe('Start time in HH:MM (24h). Omit for an all-day event.'),
+    end_time: z.string().optional().describe('End time in HH:MM (24h). Omit for an all-day event.'),
+  },
+  async ({ title, event_date, start_time, end_time }) => {
+    try {
+      const res = await apiRequest<{ event: any }>('/api/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          event_date,
+          start_time: start_time?.trim() || null,
+          end_time: end_time?.trim() || null,
+        }),
+      });
+
+      const event = res.event;
+      const time = event.start_time
+        ? event.end_time
+          ? `${event.start_time}-${event.end_time}`
+          : event.start_time
+        : 'all-day';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Created event "${event.title}" on ${event.event_date} at ${time} (ID: ${event.id})`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to create event: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: list_events
+server.tool(
+  'list_events',
+  'List calendar events in Parasti. Provide both from and to (YYYY-MM-DD) to filter a date range, or omit both to list every event.',
+  {
+    from: z.string().optional().describe('Start date of the range, inclusive, in YYYY-MM-DD format. Requires to.'),
+    to: z.string().optional().describe('End date of the range, inclusive, in YYYY-MM-DD format. Requires from.'),
+  },
+  async ({ from, to }) => {
+    try {
+      const hasFrom = Boolean(from && from.trim());
+      const hasTo = Boolean(to && to.trim());
+      // The API rejects a range with only one bound, so ask for both instead of
+      // passing through a guaranteed 400.
+      if (hasFrom !== hasTo) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: 'Provide both "from" and "to" (YYYY-MM-DD), or omit both to list every event.' }],
+        };
+      }
+
+      const query = hasFrom
+        ? `?from=${encodeURIComponent(from!.trim())}&to=${encodeURIComponent(to!.trim())}`
+        : '';
+      const res = await apiRequest<{ events: any[] }>(`/api/events${query}`);
+      const events = res.events || [];
+      if (events.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No events found.' }],
+        };
+      }
+
+      const lines = events.map((e) => {
+        const time = e.start_time
+          ? e.end_time
+            ? `${e.start_time}-${e.end_time}`
+            : e.start_time
+          : 'all-day';
+        return `- ${e.event_date} ${time} ${e.title} (ID: ${e.id})`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Events (${events.length}):\n${lines.join('\n')}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to list events: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: update_event
+server.tool(
+  'update_event',
+  'Update a calendar event in Parasti. Replace total: semua field harus diisi. Bukan partial update.',
+  {
+    eventId: z.string().describe('ID of the event to update'),
+    title: z.string().describe('New event title'),
+    event_date: z.string().describe('New event date in YYYY-MM-DD format'),
+    start_time: z.string().optional().describe('New start time in HH:MM (24h). Omit for an all-day event.'),
+    end_time: z.string().optional().describe('New end time in HH:MM (24h). Omit for an all-day event.'),
+  },
+  async ({ eventId, title, event_date, start_time, end_time }) => {
+    try {
+      const res = await apiRequest<{ event: any }>(`/api/events/${encodeURIComponent(eventId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title,
+          event_date,
+          start_time: start_time?.trim() || null,
+          end_time: end_time?.trim() || null,
+        }),
+      });
+
+      const event = res.event;
+      const time = event.start_time
+        ? event.end_time
+          ? `${event.start_time}-${event.end_time}`
+          : event.start_time
+        : 'all-day';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Updated event "${event.title}" on ${event.event_date} at ${time} (ID: ${event.id})`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to update event: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: delete_event
+server.tool(
+  'delete_event',
+  'Delete a calendar event permanently. DESTRUKTIF dan permanen. Hanya panggil setelah user mengkonfirmasi.',
+  {
+    eventId: z.string().describe('ID of the event to delete'),
+  },
+  async ({ eventId }) => {
+    try {
+      const res = await apiRequest<{ success: boolean; deleted: number }>(
+        `/api/events/${encodeURIComponent(eventId)}`,
+        { method: 'DELETE' }
+      );
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Deleted event ${eventId}. Response: ${JSON.stringify(res)}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to delete event: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: create_project
+server.tool(
+  'create_project',
+  'Create a project in Parasti: a root page flagged as a project.',
+  {
+    title: z.string().describe('Project title'),
+    icon: z.string().max(32).optional().describe('Optional emoji or icon, max 32 characters. Defaults to 📁.'),
+  },
+  async ({ title, icon }) => {
+    try {
+      const res = await apiRequest<{ page: any }>('/api/pages', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          icon: icon || '📁',
+          parent_id: null,
+        }),
+      });
+
+      const page = res.page;
+      try {
+        // POST /api/pages cannot set is_project; only PUT accepts the flag.
+        await apiRequest(`/api/pages/${encodeURIComponent(page.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ is_project: true }),
+        });
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Page "${page.title}" was created as a normal page (ID: ${page.id}), but marking it as a project failed: ${err.message}`,
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Created project "${page.title}" (ID: ${page.id})\nView at: ${config.url}/page/${page.id}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to create project: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: list_projects
+server.tool(
+  'list_projects',
+  'List all projects in Parasti (root pages flagged as projects).',
+  {},
+  async () => {
+    try {
+      const res = await apiRequest<{ pages: any[] }>('/api/pages');
+      const projects = (res.pages || []).filter((p) => p.is_project === true && p.parent_id === null);
+      if (projects.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No projects found.' }],
+        };
+      }
+
+      const lines = projects.map((p) => `- ${p.icon || '📁'} ${p.title} (ID: ${p.id})`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Projects (${projects.length}):\n${lines.join('\n')}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to list projects: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: create_page
+server.tool(
+  'create_page',
+  'Create an empty page in Parasti. Pass parentId to make it a sub-page of a project or private page; omit parentId for a root page.',
+  {
+    title: z.string().describe('Page title'),
+    icon: z.string().max(32).optional().describe('Optional emoji or icon, max 32 characters.'),
+    parentId: z.string().optional().describe('Optional parent page ID. Omit to create a root page.'),
+  },
+  async ({ title, icon, parentId }) => {
+    try {
+      const parent = parentId?.trim() || null;
+      if (parent) {
+        try {
+          await apiRequest(`/api/pages/${encodeURIComponent(parent)}`);
+        } catch {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'Parent page ID tidak ditemukan. Jalankan list_pages atau list_projects dulu untuk mengambil ID yang benar.',
+              },
+            ],
+          };
+        }
+      }
+
+      const res = await apiRequest<{ page: any }>('/api/pages', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          icon: icon || undefined,
+          parent_id: parent,
+        }),
+      });
+
+      const page = res.page;
+      const location = parent ? `under parent ${parent}` : 'at root level';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Created page "${page.title}" (ID: ${page.id}) ${location}\nView at: ${config.url}/page/${page.id}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to create page: ${err.message}` }],
       };
     }
   }
