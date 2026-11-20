@@ -140,7 +140,7 @@ async function runMcpSession() {
     capabilities: {},
     clientInfo: { name: 'test-suite', version: '1.0.0' },
   });
-  console.log('[1/14] MCP server initialized:', initRes.result.serverInfo.name, 'v' + initRes.result.serverInfo.version);
+  console.log('[1/17] MCP server initialized:', initRes.result.serverInfo.name, 'v' + initRes.result.serverInfo.version);
   sendNotification('notifications/initialized');
 
   // 2. list_pages
@@ -148,12 +148,12 @@ async function runMcpSession() {
     name: 'list_pages',
     arguments: {},
   });
-  console.log('[2/14] list_pages executed successfully.');
+  console.log('[2/17] list_pages executed successfully.');
   console.log('Current workspace pages:');
   console.log(listRes.result.content[0].text.split('\n').map((l: string) => '     ' + l).join('\n'));
 
   // 3. import_markdown with rich content
-  console.log('\n[3/14] Creating rich page with H1, H2, table, code, tasks, and quotes...');
+  console.log('\n[3/17] Creating rich page with H1, H2, table, code, tasks, and quotes...');
   const richMarkdown = `# Parasti Architecture Guide
 
 > Parasti is a self-hosted, block-based open-source note-taking workspace.
@@ -197,7 +197,7 @@ $$f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi
       markdown: richMarkdown,
     },
   });
-  console.log('[3/14] import_markdown executed successfully.');
+  console.log('[3/17] import_markdown executed successfully.');
   console.log('Result:', importRes.result.content[0].text);
 
   // Extract created page ID
@@ -206,7 +206,7 @@ $$f(x) = \\int_{-\\infty}^{\\infty} \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi
 
   // 4. import_markdown_file creating a nested subpage
   if (parentPageId) {
-    console.log(`\n[4/14] Creating local file and importing as subpage under ID: ${parentPageId}...`);
+    console.log(`\n[4/17] Creating local file and importing as subpage under ID: ${parentPageId}...`);
     const tempFilePath = path.resolve(process.cwd(), 'mcp', 'sample_subpage.md');
     fs.writeFileSync(
       tempFilePath,
@@ -229,7 +229,7 @@ This is a **subpage** created from a local \`.md\` file on disk.
         parentId: parentPageId,
       },
     });
-    console.log('[4/14] import_markdown_file executed successfully.');
+    console.log('[4/17] import_markdown_file executed successfully.');
     console.log('Result:', importFileRes.result.content[0].text);
 
     const importedFilePageId = extractId(importFileRes.result.content[0].text);
@@ -240,45 +240,45 @@ This is a **subpage** created from a local \`.md\` file on disk.
   }
 
   // 5. search_pages
-  console.log('\n[5/14] Testing search_pages...');
+  console.log('\n[5/17] Testing search_pages...');
   const searchRes = await sendRequest('tools/call', {
     name: 'search_pages',
     arguments: { query: 'Architecture' },
   });
-  console.log('[5/14] search_pages executed successfully.');
+  console.log('[5/17] search_pages executed successfully.');
   console.log('Result:', searchRes.result.content[0].text);
 
   // 6. get_page
   if (parentPageId) {
-    console.log(`\n[6/14] Fetching page details via get_page...`);
+    console.log(`\n[6/17] Fetching page details via get_page...`);
     const getPageRes = await sendRequest('tools/call', {
       name: 'get_page',
       arguments: { pageId: parentPageId },
     });
     const parsedPage = JSON.parse(getPageRes.result.content[0].text);
-    console.log(`[6/14] get_page executed. Title: "${parsedPage.title}", Block count: ${parsedPage.blocks?.length}`);
+    console.log(`[6/17] get_page executed. Title: "${parsedPage.title}", Block count: ${parsedPage.blocks?.length}`);
   }
 
   // 7. create_project
-  console.log('\n[7/14] Testing create_project...');
+  console.log('\n[7/17] Testing create_project...');
   const projectTitle = `MCP Test Project ${Date.now()}`;
   const projectText = await callTool('create_project', { title: projectTitle, icon: '🧪' });
   const projectId = extractId(projectText);
   if (!projectId) throw new Error(`create_project did not return an ID: ${projectText}`);
   createdPageIds.push(projectId);
-  console.log('[7/14] create_project executed successfully.');
+  console.log('[7/17] create_project executed successfully.');
   console.log('Result:', projectText);
 
   // 8. list_projects
-  console.log('\n[8/14] Testing list_projects...');
+  console.log('\n[8/17] Testing list_projects...');
   const projectsText = await callTool('list_projects');
   if (!projectsText.includes(projectId)) {
     throw new Error(`list_projects did not include the new project ${projectId}: ${projectsText}`);
   }
-  console.log('[8/14] list_projects executed successfully and contains the new project.');
+  console.log('[8/17] list_projects executed successfully and contains the new project.');
 
   // 9. create_page as a sub-page of the project
-  console.log('\n[9/14] Testing create_page with parentId...');
+  console.log('\n[9/17] Testing create_page with parentId...');
   const subPageText = await callTool('create_page', {
     title: `MCP Test Subpage ${Date.now()}`,
     parentId: projectId,
@@ -289,11 +289,82 @@ This is a **subpage** created from a local \`.md\` file on disk.
     throw new Error(`create_page did not report the parent: ${subPageText}`);
   }
   createdPageIds.push(subPageId);
-  console.log('[9/14] create_page executed successfully.');
+  console.log('[9/17] create_page executed successfully.');
   console.log('Result:', subPageText);
 
-  // 10. create_event
-  console.log('\n[10/14] Testing create_event...');
+  // 10. upload_image: append to the project page
+  console.log('\n[10/17] Testing upload_image (append)...');
+  const image1Path = path.resolve('/tmp/opencode', 'qa-image-1.png');
+  const image2Path = path.resolve('/tmp/opencode', 'qa-image-2.png');
+  const pngBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  fs.writeFileSync(image1Path, pngBytes);
+  fs.writeFileSync(image2Path, pngBytes);
+  const uploadText = await callTool('upload_image', { filePath: image1Path, pageId: projectId });
+  if (!uploadText.includes('as image block')) {
+    throw new Error(`upload_image did not report a block: ${uploadText}`);
+  }
+  const imageBlockMatch = uploadText.match(/image block ([0-9a-f-]+)/);
+  const imageFileMatch = uploadText.match(/\/api\/files\/([0-9a-f-]+)/);
+  if (!imageBlockMatch || !imageFileMatch) {
+    throw new Error(`upload_image response is missing IDs: ${uploadText}`);
+  }
+  const firstImageBlockId = imageBlockMatch[1];
+  const imageFileId = imageFileMatch[1];
+  console.log('[10/17] upload_image executed successfully.');
+  console.log('Result:', uploadText);
+
+  // 11. verify the block, then insert the second image after it
+  console.log('\n[11/17] Testing upload_image placement with afterBlockId...');
+  const pageWithImage = JSON.parse(await callTool('get_page', { pageId: projectId }));
+  const firstImage = (pageWithImage.blocks || []).find((b: any) => b.id === firstImageBlockId);
+  if (!firstImage || firstImage.type !== 'image' || firstImage.content !== imageFileId) {
+    throw new Error(`get_page did not show the uploaded image block: ${JSON.stringify(firstImage)}`);
+  }
+  const uploadText2 = await callTool('upload_image', {
+    filePath: image2Path,
+    pageId: projectId,
+    afterBlockId: firstImageBlockId,
+    caption: 'Test caption',
+  });
+  const imageBlockMatch2 = uploadText2.match(/image block ([0-9a-f-]+)/);
+  if (!imageBlockMatch2) {
+    throw new Error(`upload_image did not report the second block: ${uploadText2}`);
+  }
+  const secondImageBlockId = imageBlockMatch2[1];
+  const pageWithBoth = JSON.parse(await callTool('get_page', { pageId: projectId }));
+  const ordered = pageWithBoth.blocks || [];
+  const firstIndex = ordered.findIndex((b: any) => b.id === firstImageBlockId);
+  const secondImage = ordered[firstIndex + 1];
+  if (!secondImage || secondImage.id !== secondImageBlockId || secondImage.props?.caption !== 'Test caption') {
+    throw new Error(`the second image was not inserted right after the first: ${JSON.stringify(ordered)}`);
+  }
+  const nextAfterSecond = ordered[firstIndex + 2];
+  if (
+    nextAfterSecond &&
+    !(secondImage.position > ordered[firstIndex].position && secondImage.position < nextAfterSecond.position)
+  ) {
+    throw new Error(
+      `the second image position is outside its neighbours: ${firstImage.position}, ${secondImage.position}, ${nextAfterSecond.position}`
+    );
+  }
+  console.log('[11/17] upload_image placement verified.');
+
+  // 12. negative: unknown page
+  console.log('\n[12/17] Testing upload_image with an unknown pageId...');
+  let rejectedUnknownPage = false;
+  try {
+    await callTool('upload_image', { filePath: image1Path, pageId: '00000000-0000-4000-8000-000000000000' });
+  } catch (err: any) {
+    rejectedUnknownPage = String(err.message).includes('tidak ditemukan');
+  }
+  if (!rejectedUnknownPage) throw new Error('upload_image accepted an unknown pageId');
+  console.log('[12/17] upload_image rejected the unknown page as expected.');
+
+  // 13. create_event
+  console.log('\n[13/17] Testing create_event...');
   const today = localDate(0);
   const inSevenDays = localDate(7);
   const eventTitle = `MCP Test Event ${Date.now()}`;
@@ -305,19 +376,19 @@ This is a **subpage** created from a local \`.md\` file on disk.
   });
   const eventId = extractId(eventText);
   if (!eventId) throw new Error(`create_event did not return an ID: ${eventText}`);
-  console.log('[10/14] create_event executed successfully.');
+  console.log('[13/17] create_event executed successfully.');
   console.log('Result:', eventText);
 
-  // 11. list_events over today .. +7 days
-  console.log('\n[11/14] Testing list_events over today..+7 days...');
+  // 14. list_events over today .. +7 days
+  console.log('\n[14/17] Testing list_events over today..+7 days...');
   const eventsText = await callTool('list_events', { from: today, to: inSevenDays });
   if (!eventsText.includes(eventId)) {
     throw new Error(`list_events did not include the new event ${eventId}: ${eventsText}`);
   }
-  console.log('[11/14] list_events executed successfully and contains the new event.');
+  console.log('[14/17] list_events executed successfully and contains the new event.');
 
-  // 12. update_event
-  console.log('\n[12/14] Testing update_event...');
+  // 15. update_event
+  console.log('\n[15/17] Testing update_event...');
   const updatedTitle = `${eventTitle} updated`;
   const updateText = await callTool('update_event', {
     eventId,
@@ -329,24 +400,27 @@ This is a **subpage** created from a local \`.md\` file on disk.
   if (!updateText.includes(updatedTitle)) {
     throw new Error(`update_event did not report the new title: ${updateText}`);
   }
-  console.log('[12/14] update_event executed successfully.');
+  console.log('[15/17] update_event executed successfully.');
   console.log('Result:', updateText);
 
-  // 13. delete_event
-  console.log('\n[13/14] Testing delete_event...');
+  // 16. delete_event
+  console.log('\n[16/17] Testing delete_event...');
   const deleteText = await callTool('delete_event', { eventId });
   if (!deleteText.includes('"success":true')) {
     throw new Error(`delete_event did not confirm success: ${deleteText}`);
   }
-  console.log('[13/14] delete_event executed successfully.');
+  console.log('[16/17] delete_event executed successfully.');
   console.log('Result:', deleteText);
 
-  // 14. Remove the pages created by this run (cascade: subpages too)
-  console.log('\n[14/14] Cleaning up test pages...');
+  // 17. Remove the pages created by this run (cascade: subpages and uploads too)
+  console.log('\n[17/17] Cleaning up test pages...');
   for (const pageId of [...createdPageIds].reverse()) {
     await deletePagePermanently(pageId);
   }
-  console.log(`[14/14] Removed ${createdPageIds.length} test pages.`);
+  for (const imagePath of [image1Path, image2Path]) {
+    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+  }
+  console.log(`[17/17] Removed ${createdPageIds.length} test pages.`);
 
   console.log('\nAll MCP test cases completed successfully.');
   child.kill();
