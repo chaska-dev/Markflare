@@ -119,6 +119,89 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   return (await res.json()) as T;
 }
 
+// Supported image types for upload_image. The server stores the multipart
+// part's MIME type, and the UI picks an image block from it.
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+};
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  page_id?: string | null;
+  created_at?: string;
+  url: string;
+}
+
+// POST /api/files/upload is multipart, which the JSON-only apiRequest cannot
+// send. Auth still comes from getAuthToken, and a 401 retries once like above.
+async function uploadFile(filePath: string, pageId: string | null): Promise<UploadedFile> {
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  const ext = path.extname(resolved).toLowerCase();
+  const mime = IMAGE_MIME_TYPES[ext];
+  if (!mime) {
+    throw new Error(`Unsupported image type: ${ext || '(no extension)'}`);
+  }
+
+  const bytes = fs.readFileSync(resolved);
+  if (bytes.length > MAX_UPLOAD_BYTES) {
+    throw new Error('File too large (max 25MB)');
+  }
+
+  const buildForm = () => {
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: mime }), path.basename(resolved));
+    if (pageId) form.append('page_id', pageId);
+    return form;
+  };
+
+  const send = async () => {
+    const token = await getAuthToken();
+    return fetch(`${config.url}/api/files/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: buildForm(),
+    });
+  };
+
+  let res = await send();
+  if (res.status === 401) {
+    cachedToken = null;
+    res = await send();
+  }
+
+  if (!res.ok) {
+    throw new Error(`Parasti API error [${res.status}] /api/files/upload: ${await res.text()}`);
+  }
+
+  const data = (await res.json()) as { file: UploadedFile };
+  return data.file;
+}
+
+// Same insertion rules as src/utils/blockTree.ts positionBetween, so images
+// land where the editor itself would put them.
+function positionBetween(prev?: number, next?: number): number {
+  if (prev === undefined && next === undefined) return 1000;
+  if (prev === undefined) return next! - 1000;
+  if (next === undefined) return prev + 1000;
+  return (prev + next) / 2;
+}
+
 // Create MCP server instance
 const server = new McpServer({
   name: 'parasti-mcp',
@@ -635,6 +718,90 @@ server.tool(
       return {
         isError: true,
         content: [{ type: 'text', text: `Failed to create page: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: upload_image
+server.tool(
+  'upload_image',
+  'Upload a local image file into a Parasti page as an image block. Insert it after a given block, at an index, or append it at the end.',
+  {
+    filePath: z.string().describe('Path to a local image file (png, jpg, jpeg, gif, webp, svg, bmp, avif)'),
+    pageId: z.string().describe('ID of the page that will receive the image'),
+    afterBlockId: z.string().optional().describe('Insert the image right after this block ID'),
+    positionIndex: z.number().int().min(0).optional().describe('Insert the image before the block at this 0-based index'),
+    caption: z.string().optional().describe('Optional caption stored in props.caption'),
+    alt: z.string().optional().describe('Optional alt text stored in the block language field'),
+  },
+  async ({ filePath, pageId, afterBlockId, positionIndex, caption, alt }) => {
+    try {
+      let pageRes: { page: any };
+      try {
+        pageRes = await apiRequest<{ page: any }>(`/api/pages/${encodeURIComponent(pageId)}`);
+      } catch {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: 'Page ID tidak ditemukan. Jalankan list_pages dulu untuk mengambil ID yang benar.',
+            },
+          ],
+        };
+      }
+
+      const blocks: any[] = pageRes.page?.blocks || [];
+      let position: number;
+      if (afterBlockId) {
+        const index = blocks.findIndex((b) => b.id === afterBlockId);
+        if (index === -1) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'Block ID tidak ditemukan di halaman ini. Jalankan get_page untuk melihat ID blok yang valid.',
+              },
+            ],
+          };
+        }
+        position = positionBetween(blocks[index].position, blocks[index + 1]?.position);
+      } else if (positionIndex !== undefined) {
+        const index = Math.min(positionIndex, blocks.length);
+        position = positionBetween(blocks[index - 1]?.position, blocks[index]?.position);
+      } else {
+        position = positionBetween(blocks[blocks.length - 1]?.position, undefined);
+      }
+
+      const file = await uploadFile(filePath, pageId);
+      const props: Record<string, unknown> = {};
+      if (caption) props.caption = caption;
+
+      const blockRes = await apiRequest<{ block: any }>(`/api/pages/${encodeURIComponent(pageId)}/blocks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'image',
+          content: file.id,
+          position,
+          language: alt || '',
+          props,
+        }),
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Uploaded image "${file.name}" (${file.size} bytes) into page ${pageId} as image block ${blockRes.block.id} at position ${position}.\nImage URL: ${config.url}${file.url}\nView page: ${config.url}/page/${pageId}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to upload image: ${err.message}` }],
       };
     }
   }
