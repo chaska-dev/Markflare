@@ -1,0 +1,26 @@
+{
+  "name": "parasti",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-20",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parasti-db",
+      // TODO(Roki): ganti dengan database_id nyata dari `wrangler d1 create parasti-db`
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      // TODO(Roki): sesuaikan dengan nama bucket R2 yang kamu buat
+      "bucket_name": "parasti-files"
+    }
+  ]
+}

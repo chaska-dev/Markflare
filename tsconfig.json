@@ -18,5 +18,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src", "functions"]
+  "include": ["src", "functions", "worker"]
 }

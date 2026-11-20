@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { handle } from 'hono/cloudflare-pages';
 import type { Context } from 'hono';
 import { parseMarkdownToBlocks, blocksToMarkdown } from '../../server/shared/markdown';
 import { parseBlockProps, serializeBlockProps } from '../../server/shared/blockProps';
@@ -29,7 +28,7 @@ interface CurrentUser {
   isAdmin: boolean;
 }
 
-type AppEnv = { Bindings: Bindings; Variables: { user: CurrentUser } };
+export type AppEnv = { Bindings: Bindings; Variables: { user: CurrentUser } };
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const LOGIN_RATE_WINDOW_MS = 60 * 1000; // 1-minute window
@@ -209,7 +208,13 @@ let schemaInitialized = false;
 async function ensureSchema(db: D1Database) {
   if (schemaInitialized) return;
   try {
-    await db.exec(`
+    // db.exec() D1 memisahkan statement per BARIS newline (bukan per
+    // titik-koma), jadi SQL multiline terpotong ("incomplete input").
+    // Solusi: tetap satu string, lalu kirim tiap statement via batch().
+    // Catatan: statement di sini tidak boleh memakai ';' di dalam string
+    // literal (mis. nilai default) karena akan terpecah di situ.
+    await db.batch(
+      `
       CREATE TABLE IF NOT EXISTS files (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -271,7 +276,12 @@ async function ensureSchema(db: D1Database) {
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
-    `);
+    `
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => db.prepare(s)),
+    );
     schemaInitialized = true;
   } catch (err) {
     console.error('[db] ensureSchema error:', err);
@@ -1748,4 +1758,6 @@ app.put('/workspace', async (c) => {
   return c.json(row);
 });
 
-export const onRequest = handle(app);
+// Entry: dipasang sebagai Cloudflare Worker lewat wrangler.jsonc (main =
+// worker/index.ts). app.fetch menerima binding runtime (DB, BUCKET, AUTH_*).
+export default app;

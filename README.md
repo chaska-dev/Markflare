@@ -56,7 +56,7 @@ events, image and file uploads, and a bilingual interface (English / Spanish).
 | Layer | Production | Local dev |
 |---|---|---|
 | **Frontend** | React 18 + Vite 5 + TypeScript | same |
-| **Backend** | Cloudflare Pages Functions (Hono) | Express 5 |
+| **Backend** | Cloudflare Workers (Hono) | Express 5 |
 | **Database** | Cloudflare D1 | `better-sqlite3` (SQLite file) |
 | **File storage** | Cloudflare R2 | `uploads/` on disk |
 | **AI / MCP** | Official Model Context Protocol server (`@modelcontextprotocol/sdk`) | same |
@@ -73,7 +73,7 @@ You create three things, and they each have a job:
 
 | What | Cloudflare service | Job in plain language | Created in |
 |---|---|---|---|
-| The website | **Pages** | Serves the app and runs the API. It's the "web host". | [step 1.4](#14-create-the-pages-project) |
+| The website | **Workers** (with static assets) | Serves the app and runs the API. It's the "web host". | `wrangler.jsonc` + [step 3](#3-terminal-wrangler-cli) |
 | Your notes | **D1** | A SQLite database. Holds pages, blocks, share links, and events. | [step 1.2](#12-create-the-database-and-the-bucket) |
 | Your images | **R2** | Object storage, like a private folder of files. | [step 1.2](#12-create-the-database-and-the-bucket) |
 
@@ -88,6 +88,19 @@ that database". The names are fixed and the code expects them:
 ---
 
 ## Deploy
+
+> **⚠️ Outdated below:** the deploy steps still document the old Cloudflare
+> Pages flow. The project now deploys as a **Cloudflare Worker with static
+> assets** (migrated 2026-11-20; see `wrangler.jsonc` and `worker/index.ts`).
+> Short version:
+>
+> 1. `wrangler d1 create parasti-db` → put the real id in `wrangler.jsonc`
+> 2. create an R2 bucket → match `bucket_name` in `wrangler.jsonc`
+> 3. `pnpm run db:migrate:prod`
+> 4. `wrangler secret put AUTH_USERNAME` (repeat for `AUTH_PASSWORD` and `AUTH_SECRET`)
+> 5. `pnpm run deploy`
+>
+> The full guide below is pending a rewrite.
 
 Three methods. All of them end up with the same thing running on
 `https://parasti.pages.dev`.
@@ -498,7 +511,7 @@ pnpm run dev:web      # frontend only
 | `pnpm run db:migrate:all` | apply migrations to the local SQLite file |
 | `pnpm run db:migrate:local` | apply migrations to the local SQLite via `wrangler` |
 | `pnpm run db:migrate:prod` | apply migrations to the remote D1 |
-| `pnpm run preview` | serve the built `dist/` through `wrangler pages dev` |
+| `pnpm run preview` | serve the built `dist/` + API through `wrangler dev` |
 | `pnpm run deploy` | build and deploy `dist/` to Cloudflare Pages |
 | `pnpm run mcp` | start the MCP server |
 | `pnpm run mcp:token` | generate an API/MCP token from the CLI |
@@ -675,7 +688,7 @@ cp .env.example .dev.vars
 | `AUTH_SECRET` | yes | Long random string for signing bearer tokens. Generate with `openssl rand -hex 32`. Rotating it **invalidates every token issued so far**, which is what you want if one ever leaks. |
 | `PARASTI_DB_PATH` | no | Override the local SQLite path (default `./data/parasti.db`) |
 
-**Local** — read from `.dev.vars` by both `wrangler pages dev` and the local Express server.
+**Local** — read from `.dev.vars` by both `wrangler dev` and the local Express server.
 
 **Production** — set the same three `AUTH_*` values as **Encrypt**-type secrets in the
 Cloudflare dashboard, under **Settings → Variables and secrets**.
