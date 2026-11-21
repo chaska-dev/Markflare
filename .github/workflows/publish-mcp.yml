@@ -64,4 +64,15 @@ jobs:
 
       - name: Publish to npm
         working-directory: mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # TEMPORARY workaround for npm/cli#9969: the registry rejects
+          # immutable-subject OIDC tokens ("package not found" -> E404), so we
+          # suppress the OIDC path and publish with a granular token instead.
+          # When npm fixes #9969, remove this env block (and the NPM_TOKEN
+          # secret) to switch back to trusted publishing, then recreate the
+          # trusted publisher connection on npmjs.com (it expires after 2
+          # days without a successful publish).
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
         run: npm publish
