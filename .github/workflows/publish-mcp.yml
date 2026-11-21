@@ -46,6 +46,22 @@ jobs:
           (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0.0.0"}}}'; sleep 0.5) \
             | node dist/index.js | grep -q '"parasti-mcp"'
 
+      - name: Debug OIDC identity
+        run: |
+          echo "node: $(node --version), npm: $(npm --version)"
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NODE_AUTH_TOKEN is set (length: ${#NODE_AUTH_TOKEN})"
+          else
+            echo "NODE_AUTH_TOKEN is unset"
+          fi
+          RAW=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org")
+          echo "$RAW" | jq -r '.value // empty' | cut -d. -f2 | \
+            python3 -c "import sys,base64,json;s=sys.stdin.read().strip();s+='='*(-len(s)%4);print(json.dumps(json.loads(base64.urlsafe_b64decode(s)),indent=2))"
+          if [ -z "$(echo "$RAW" | jq -r '.value // empty')" ]; then
+            echo "OIDC fetch raw response: $RAW" | head -c 300
+          fi
+
       - name: Publish to npm
         working-directory: mcp
         run: npm publish
