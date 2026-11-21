@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { useLanguage } from '../i18n/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -19,13 +18,13 @@ import {
 export function Login() {
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +32,9 @@ export function Login() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate('/');
+      // Full reload: PageContext must refetch the new account's pages instead
+      // of keeping the previous user's tree in memory.
+      window.location.href = '/';
     } catch (err) {
       setError(t('login.invalidCredentials'));
     } finally {
@@ -67,16 +68,28 @@ export function Login() {
       >
         <motion.div
           className="login-icon-wrapper"
-          animate={{ y: [0, -5, 0] }}
-          transition={{ repeat: Infinity, duration: 3.5, ease: 'easeInOut' }}
+          style={{ transformOrigin: '50% 100%', willChange: 'transform' }}
+          animate={
+            reduceMotion
+              ? undefined
+              : {
+                  y: [0, -6, -2, 0],
+                  rotate: [0, -1.4, 0.9, 0],
+                  scale: [1, 1.015, 1.005, 1],
+                }
+          }
+          transition={
+            reduceMotion
+              ? undefined
+              : { repeat: Infinity, duration: 6, ease: 'easeInOut', times: [0, 0.35, 0.72, 1] }
+          }
         >
           <Logo size={58} variant="icon" />
         </motion.div>
 
         <div className="login-brand-header">
           <div className="workspace-brand-text login-brand-title">
-            <span className="brand-mark">mark</span>
-            <span className="brand-flare">flare</span>
+            <Logo size={92} variant="word" />
           </div>
           <span className="login-badge">Cloudflare Workspace</span>
         </div>

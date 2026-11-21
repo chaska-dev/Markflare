@@ -67,12 +67,18 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const toggleMobile = useCallback(() => setMobileOpen(prev => !prev), []);
   const toggleDesktopCollapsed = useCallback(() => setDesktopCollapsed(prev => !prev), []);
 
-  // Scroll lock on mobile while the drawer is open.
+  // Scroll lock on mobile while the drawer is open. The real scroller is
+  // .main-content (see scroll.css), so a class on <html> locks it too without
+  // this provider needing a ref to Layout's element.
   useEffect(() => {
     if (!isMobile || !mobileOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    document.documentElement.classList.add('sidebar-scroll-locked');
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.classList.remove('sidebar-scroll-locked');
+    };
   }, [isMobile, mobileOpen]);
 
   // Cmd/Ctrl+B shortcut to collapse on desktop.

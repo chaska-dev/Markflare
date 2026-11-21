@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "markflare": {
+    "parasti": {
       "command": "npx",
-      "args": ["-y", "tsx", "path/to/markflare/mcp/index.ts"],
+      "args": ["-y", "parasti-mcp"],
       "env": {
-        "MARKFLARE_URL": "http://localhost:3000",
-        "MARKFLARE_API_TOKEN": "YOUR_API_TOKEN_HERE"
+        "PARASTI_URL": "http://localhost:3000",
+        "PARASTI_API_TOKEN": "YOUR_API_TOKEN_HERE"
       }
     }
   }

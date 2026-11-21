@@ -47,13 +47,13 @@ async function main() {
   const b64 = Buffer.from(payload, 'utf8').toString('base64');
   const token = `${b64}.${sig}`;
 
-  console.log('\n--- Markflare API / MCP Token ---');
+  console.log('\n--- Parasti API / MCP Token ---');
   console.log(`Username:   ${username}`);
   console.log(`Valid for:  ${days} days (${new Date(expiresAt).toISOString()})`);
   console.log('\nToken:');
   console.log(token);
   console.log('\nAdd to your MCP client configuration:');
-  console.log(`"MARKFLARE_API_TOKEN": "${token}"\n`);
+  console.log(`"PARASTI_API_TOKEN": "${token}"\n`);
 }
 
 main().catch(console.error);

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 
 export const PRESET_GRADIENTS = [
-  { name: 'Flare Orange', value: 'linear-gradient(135deg, #F38020 0%, #FAAD3F 50%, #FF5A00 100%)' },
+  { name: 'Parasti Terracotta', value: 'linear-gradient(135deg, #A34A2C 0%, #C05A3C 50%, #E08A6C 100%)' },
   { name: 'Sunset Coral', value: 'linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%)' },
   { name: 'Cyberpunk', value: 'linear-gradient(135deg, #8A2387 0%, #E94057 50%, #F27121 100%)' },
   { name: 'Deep Ocean', value: 'linear-gradient(135deg, #2b5876 0%, #4e4376 100%)' },

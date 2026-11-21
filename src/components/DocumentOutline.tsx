@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Block } from '../types';
+import { useScrollContainer } from '../hooks/useScrollContainer';
+import { documentOrder } from '../utils/blockSelection';
 
 interface Props {
   blocks: Block[];
@@ -18,11 +20,16 @@ export function DocumentOutline({ blocks }: Props) {
   const [hoveredHeading, setHoveredHeading] = useState<HeadingItem | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number } | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useScrollContainer();
 
-  // Filter and normalize headings.
+  // Filter and normalize headings. Document order, not the list's: positions
+  // only compare among siblings, and the headings inside columns (which restart
+  // at the same positions) have to come out column by column.
   const headings: HeadingItem[] = useMemo(() => {
+    const order = new Map(documentOrder(blocks || []).map((id, i) => [id, i]));
     return (blocks || [])
       .filter(b => b.type === 'heading1' || b.type === 'heading2' || b.type === 'heading3')
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
       .map(b => {
         const clean = (b.content || '')
           .replace(/^#+\s*/, '')
@@ -42,7 +49,7 @@ export function DocumentOutline({ blocks }: Props) {
   useEffect(() => {
     if (headings.length === 0) return;
 
-    const scrollContainer = document.querySelector('.main-content');
+    const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
 
     const handleScroll = () => {
@@ -76,7 +83,7 @@ export function DocumentOutline({ blocks }: Props) {
     return () => {
       scrollContainer.removeEventListener('scroll', handleScroll);
     };
-  }, [headings]);
+  }, [headings, scrollContainerRef]);
 
   // Hide the rail for short notes (less than 2 headings) to avoid clutter.
   if (headings.length < 2) {
@@ -85,7 +92,7 @@ export function DocumentOutline({ blocks }: Props) {
 
   const handleScrollTo = (id: string) => {
     const el = document.getElementById(`block-${id}`);
-    const scrollContainer = document.querySelector('.main-content');
+    const scrollContainer = scrollContainerRef.current;
 
     if (el && scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();

@@ -20,7 +20,7 @@ interface Props {
 
 const PRESET_COLORS_DARK = [
   '#FFFFFF', // Pure White
-  '#F38020', // Markflare Orange
+  '#C05A3C', // Parasti Terracotta
   '#60A5FA', // Blue
   '#34D399', // Emerald
   '#A78BFA', // Violet
@@ -33,7 +33,7 @@ const PRESET_COLORS_DARK = [
 
 const PRESET_COLORS_LIGHT = [
   '#111111', // Pure Black
-  '#F38020', // Markflare Orange
+  '#C05A3C', // Parasti Terracotta
   '#2563EB', // Strong Blue
   '#059669', // Strong Green
   '#7C3AED', // Strong Purple

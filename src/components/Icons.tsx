@@ -263,34 +263,6 @@ export function ArrowUpRightIcon({ size = 14, ...rest }: IconProps) {
   );
 }
 
-export function ArrowUpIcon({ size = 14, ...rest }: IconProps) {
-  return (
-    <motion.svg
-      {...base(size)}
-      whileHover={{ y: -2 }}
-      transition={springTransition}
-      {...rest}
-    >
-      <line x1="12" y1="19" x2="12" y2="5" />
-      <polyline points="5 12 12 5 19 12" />
-    </motion.svg>
-  );
-}
-
-export function ArrowDownIcon({ size = 14, ...rest }: IconProps) {
-  return (
-    <motion.svg
-      {...base(size)}
-      whileHover={{ y: 2 }}
-      transition={springTransition}
-      {...rest}
-    >
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <polyline points="19 12 12 19 5 12" />
-    </motion.svg>
-  );
-}
-
 export function NotebookIcon({ size = 16, ...rest }: IconProps) {
   return (
     <motion.svg
@@ -332,20 +304,6 @@ export function LogOutIcon({ size = 16, className = '', ...rest }: IconProps) {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
-    </motion.svg>
-  );
-}
-
-export function PowerIcon({ size = 16, ...rest }: IconProps) {
-  return (
-    <motion.svg
-      {...base(size)}
-      whileHover={{ scale: 1.12, rotate: -15 }}
-      transition={springTransition}
-      {...rest}
-    >
-      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-      <line x1="12" y1="2" x2="12" y2="12" />
     </motion.svg>
   );
 }
@@ -411,15 +369,16 @@ export function TableIcon({ size = 16, ...rest }: IconProps) {
   );
 }
 
-export function ToggleIcon({ size = 16, ...rest }: IconProps) {
+export function ColumnsIcon({ size = 16, ...rest }: IconProps) {
   return (
     <motion.svg
       {...base(size)}
-      whileHover={{ rotate: 45 }}
+      whileHover={{ scale: 1.08 }}
       transition={springTransition}
       {...rest}
     >
-      <polyline points="9 6 15 12 9 18" />
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="12" y1="3" x2="12" y2="21" />
     </motion.svg>
   );
 }
@@ -637,6 +596,47 @@ export function MathIcon({ size = 16, ...rest }: IconProps) {
   );
 }
 
+export function BookmarkIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ y: -1.5 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+    </motion.svg>
+  );
+}
+
+export function EmbedIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ scale: 1.08 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <polygon points="10 9 15 12 10 15 10 9" />
+    </motion.svg>
+  );
+}
+
+export function RefreshIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg
+      {...base(size)}
+      whileHover={{ rotate: 90 }}
+      transition={springTransition}
+      {...rest}
+    >
+      <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+    </motion.svg>
+  );
+}
+
 export function SearchIcon({ size = 16, className = '', ...rest }: IconProps) {
   return (
     <motion.svg
@@ -765,3 +765,52 @@ export function KeyIcon({ size = 16, className = '', ...rest }: IconProps) {
   );
 }
 
+export function AlignLeftIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg {...base(size)} {...rest}>
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="15" y1="12" x2="3" y2="12" />
+      <line x1="17" y1="18" x2="3" y2="18" />
+    </motion.svg>
+  );
+}
+
+export function AlignCenterIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg {...base(size)} {...rest}>
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="17" y1="12" x2="7" y2="12" />
+      <line x1="19" y1="18" x2="5" y2="18" />
+    </motion.svg>
+  );
+}
+
+export function AlignRightIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg {...base(size)} {...rest}>
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+      <line x1="21" y1="18" x2="7" y2="18" />
+    </motion.svg>
+  );
+}
+
+export function CaptionIcon({ size = 16, ...rest }: IconProps) {
+  return (
+    <motion.svg {...base(size)} {...rest}>
+      <rect x="3" y="3" width="18" height="12" rx="2" ry="2" />
+      <line x1="7" y1="19" x2="17" y2="19" />
+    </motion.svg>
+  );
+}
+
+export function CalendarIcon({ size = 16, className = '', ...rest }: IconProps) {
+  return (
+    <motion.svg {...base(size)} className={`icon-calendar ${className}`.trim()} {...rest}>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </motion.svg>
+  );
+}

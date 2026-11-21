@@ -1,0 +1,474 @@
+/* Editor extras: page mentions, shortcuts cheat sheet, lazy math fallback. */
+
+/* ---- Page links (`[Title](/page/<id>)`) ---- */
+.block-content a.inline-link--page,
+.readonly-block a.inline-link--page {
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.block-content a.inline-link--page:hover,
+.readonly-block a.inline-link--page:hover {
+  color: var(--text-primary);
+  filter: none;
+  background: var(--bg-hover);
+  border-bottom-color: var(--text-secondary);
+}
+.inline-link-icon {
+  margin-right: 0.25em;
+}
+
+/* ---- Mention picker (shares .slash-menu for position/background) ---- */
+.mention-menu {
+  width: 280px;
+}
+.mention-menu-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+.mention-menu-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Lazy KaTeX fallback ---- */
+.math-loading {
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* ---- Keyboard shortcuts cheat sheet ---- */
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+.shortcuts-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+.shortcuts-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.shortcuts-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.shortcuts-close:hover,
+.shortcuts-close:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.shortcuts-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 14px;
+}
+.shortcuts-group-title {
+  margin: 14px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+.shortcuts-keys {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+.shortcuts-key {
+  min-width: 22px;
+  padding: 2px 6px;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+/* ---- Block colors (props.color) ----
+   Muted tones in the spirit of Notion's: readable text colors and soft
+   backgrounds, one set per theme. The name in data-color picks the variable;
+   "<name>" colors the text, "<name>_background" the block's background. */
+:root,
+[data-theme="dark"] {
+  --color-gray: #979a9b;
+  --color-gray-bg: #454b4e;
+  --color-brown: #937264;
+  --color-brown-bg: #434040;
+  --color-orange: #ffa344;
+  --color-orange-bg: #594a3a;
+  --color-yellow: #ffdc49;
+  --color-yellow-bg: #59563b;
+  --color-green: #4dab9a;
+  --color-green-bg: #354c4b;
+  --color-blue: #529cca;
+  --color-blue-bg: #364954;
+  --color-purple: #9a6dd7;
+  --color-purple-bg: #443f57;
+  --color-pink: #e255a1;
+  --color-pink-bg: #533b4c;
+  --color-red: #ff7369;
+  --color-red-bg: #594141;
+}
+[data-theme="light"] {
+  --color-gray: #787774;
+  --color-gray-bg: #f1f1ef;
+  --color-brown: #9f6b53;
+  --color-brown-bg: #f4eeee;
+  --color-orange: #d9730d;
+  --color-orange-bg: #fbecdd;
+  --color-yellow: #cb912f;
+  --color-yellow-bg: #fbf3db;
+  --color-green: #448361;
+  --color-green-bg: #edf3ec;
+  --color-blue: #337ea9;
+  --color-blue-bg: #e7f3f8;
+  --color-purple: #9065b0;
+  --color-purple-bg: #f6f3f9;
+  --color-pink: #c14c8a;
+  --color-pink-bg: #faf1f5;
+  --color-red: #d44c47;
+  --color-red-bg: #fdebec;
+}
+[data-color="gray"] { --block-fg: var(--color-gray); }
+[data-color="brown"] { --block-fg: var(--color-brown); }
+[data-color="orange"] { --block-fg: var(--color-orange); }
+[data-color="yellow"] { --block-fg: var(--color-yellow); }
+[data-color="green"] { --block-fg: var(--color-green); }
+[data-color="blue"] { --block-fg: var(--color-blue); }
+[data-color="purple"] { --block-fg: var(--color-purple); }
+[data-color="pink"] { --block-fg: var(--color-pink); }
+[data-color="red"] { --block-fg: var(--color-red); }
+[data-color="gray_background"] { --block-bg: var(--color-gray-bg); }
+[data-color="brown_background"] { --block-bg: var(--color-brown-bg); }
+[data-color="orange_background"] { --block-bg: var(--color-orange-bg); }
+[data-color="yellow_background"] { --block-bg: var(--color-yellow-bg); }
+[data-color="green_background"] { --block-bg: var(--color-green-bg); }
+[data-color="blue_background"] { --block-bg: var(--color-blue-bg); }
+[data-color="purple_background"] { --block-bg: var(--color-purple-bg); }
+[data-color="pink_background"] { --block-bg: var(--color-pink-bg); }
+[data-color="red_background"] { --block-bg: var(--color-red-bg); }
+/* Not inherited from a colored block that contains the element (the block's
+   context menu is inside it). */
+[data-color="default"] {
+  --block-fg: var(--text-primary);
+  --block-bg: transparent;
+}
+
+.block-wrapper[data-color]:not([data-color$="_background"]) .block-content,
+.block-wrapper[data-color]:not([data-color$="_background"]) .block-callout,
+.readonly-block[data-color]:not([data-color$="_background"]) {
+  color: var(--block-fg);
+}
+.block-wrapper[data-color] .block-todo.checked .block-content {
+  opacity: 0.6;
+}
+.block-wrapper[data-color$="_background"] > :is(.block-content, .block-todo, .block-callout),
+.readonly-block[data-color$="_background"] {
+  background: var(--block-bg);
+  border-radius: 4px;
+  /* Lets the fill reach past the text without moving anything. */
+  box-shadow: 0 0 0 2px var(--block-bg);
+}
+.block-wrapper[data-color$="_background"] > .block-callout,
+.readonly-callout[data-color$="_background"] {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* ---- Color menu (block context menu and format toolbar) ---- */
+.color-menu {
+  display: flex;
+  gap: 8px;
+}
+.color-menu-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+}
+.color-menu-heading {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  user-select: none;
+}
+.color-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.color-menu-item:hover,
+.color-menu-item:focus-visible {
+  background: var(--bg-hover);
+}
+.color-menu-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--block-fg, var(--text-primary));
+  background: var(--block-bg, transparent);
+}
+.color-menu-swatch[data-swatch="text"] {
+  background: transparent;
+}
+.color-menu-swatch[data-swatch="background"] {
+  color: var(--text-primary);
+}
+.color-menu-check {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ---- Context menu submenu ---- */
+.context-menu-submenu-host {
+  position: relative;
+}
+.context-menu-chevron {
+  display: flex;
+  margin-left: auto;
+  color: var(--text-secondary, #999);
+}
+.context-submenu {
+  position: absolute;
+  top: -5px;
+  left: calc(100% + 2px);
+  z-index: 1;
+  width: max-content;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--bg-primary, #1f1f23);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* ---- Floating format toolbar (over a text selection) ---- */
+.format-toolbar {
+  position: fixed;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.format-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.format-toolbar-btn:hover,
+.format-toolbar-btn.is-active {
+  background: var(--bg-hover);
+}
+.format-toolbar-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+.format-toolbar-glyph--bold {
+  font-weight: 700;
+}
+.format-toolbar-glyph--italic {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+}
+.format-toolbar-glyph--strike {
+  text-decoration: line-through;
+}
+.format-toolbar-color-glyph {
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--block-fg, var(--text-primary));
+  background: var(--block-bg, transparent);
+}
+.format-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--border-color);
+}
+.format-toolbar-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Columns (column_list > column) ---- */
+/* The row is a flex container; each column's share of it is set inline
+   (flex: <fraction> 1 0%), see ColumnRow. min-width: 0 lets long content wrap
+   instead of widening its column. */
+.block-columns {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  margin: 2px 0;
+}
+.block-column {
+  min-width: 0;
+}
+/* Space between columns. In the editor it also holds the divider and leaves room
+   for the next column's block handle, which sits just left of its blocks. */
+.block-column-gutter {
+  position: relative;
+  flex: 0 0 32px;
+  align-self: stretch;
+}
+.block-column-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.block-column-resize::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.block-column-resize:hover::after,
+.block-columns--resizing .block-column-resize::after {
+  background: var(--accent);
+}
+.block-columns--resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+/* Shared page: no handles, no dividers. */
+.block-columns--readonly .block-column-gutter {
+  flex-basis: 24px;
+}
+.block-columns--readonly > .block-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Drop on the left / right edge of a block: a new column beside it. */
+.block-wrapper--drop-left,
+.drop-left {
+  box-shadow: inset 3px 0 0 0 var(--accent);
+  border-radius: 4px;
+}
+.block-wrapper--drop-right,
+.drop-right {
+  box-shadow: inset -3px 0 0 0 var(--accent);
+  border-radius: 4px;
+}
+.block-wrapper--drop-left:hover,
+.drop-left:hover,
+.block-wrapper--drop-right:hover,
+.drop-right:hover {
+  background-color: transparent;
+}
+
+/* Narrow screens: the columns stack, in order. */
+@media (max-width: 639px) {
+  .block-columns {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .block-columns > .block-column {
+    flex: none !important;
+    width: 100%;
+  }
+  .block-column-gutter {
+    display: none;
+  }
+}

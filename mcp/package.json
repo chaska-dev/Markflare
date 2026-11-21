@@ -1,0 +1,50 @@
+{
+  "name": "parasti-mcp",
+  "version": "1.0.1",
+  "description": "Official MCP (Model Context Protocol) server for Parasti: import Markdown pages, search, calendar events, projects, and image uploads from any AI assistant.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rokifran/Parasti.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://github.com/rokifran/Parasti#readme",
+  "bugs": "https://github.com/rokifran/Parasti/issues",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "parasti",
+    "notes",
+    "knowledge-base",
+    "calendar",
+    "ai",
+    "llm",
+    "claude",
+    "cursor"
+  ],
+  "bin": {
+    "parasti-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^5.5.4"
+  }
+}

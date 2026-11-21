@@ -26,14 +26,14 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const THEME_STORAGE_KEY = 'markflare_theme';
-const ICON_MODE_KEY = 'markflare_icon_mode';
-const ICON_COLOR_KEY = 'markflare_icon_color';
+const THEME_STORAGE_KEY = 'parasti_theme';
+const ICON_MODE_KEY = 'parasti_icon_mode';
+const ICON_COLOR_KEY = 'parasti_icon_color';
 
-const ICON_MODE_DARK_KEY = 'markflare_icon_mode_dark';
-const ICON_COLOR_DARK_KEY = 'markflare_icon_color_dark';
-const ICON_MODE_LIGHT_KEY = 'markflare_icon_mode_light';
-const ICON_COLOR_LIGHT_KEY = 'markflare_icon_color_light';
+const ICON_MODE_DARK_KEY = 'parasti_icon_mode_dark';
+const ICON_COLOR_DARK_KEY = 'parasti_icon_color_dark';
+const ICON_MODE_LIGHT_KEY = 'parasti_icon_mode_light';
+const ICON_COLOR_LIGHT_KEY = 'parasti_icon_color_light';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
@@ -42,13 +42,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (saved === 'light' || saved === 'dark') {
         return saved;
       }
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-        return 'light';
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
       }
     } catch (e) {
       console.error('Read theme error:', e);
     }
-    return 'dark'; // default theme
+    return 'light'; // default theme
   });
 
   // Dark theme: color and mode state.

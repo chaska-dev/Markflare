@@ -1,38 +1,48 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
 import { PageWithBlocks } from '../types';
 import { usePageContext } from '../contexts/PageContext';
 import { BlockEditor } from './BlockEditor';
-import { PlusIcon, ShareIcon, UploadIcon } from './Icons';
+import { PlusIcon, ShareIcon, UploadIcon, TrashIcon } from './Icons';
+import { StarIcon, StarFilledIcon, FullWidthIcon, RestoreIcon } from './PageIcons';
+import { ConfirmDialog } from './ConfirmDialog';
+import { ReadOnlyBlock } from './ReadOnlyBlock';
 import { SharePopover } from './SharePopover';
 import { CoverBanner } from './CoverBanner';
 import { IconPicker } from './IconPicker';
 import { DocumentOutline } from './DocumentOutline';
-import {
-  addRecentPage,
-  getPageCover,
-  setPageCover,
-  isProject,
-  toggleProject,
-  STORAGE_EVENTS,
-} from '../utils/workspaceStorage';
+import { addRecentPage, removeRecentPage } from '../utils/workspaceStorage';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useScrollContainer } from '../hooks/useScrollContainer';
+import { usePageScrollMemory } from '../hooks/usePageScrollMemory';
 
 export function PageView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { t } = useLanguage();
   const [page, setPage] = useState<PageWithBlocks | null>(null);
   const [loading, setLoading] = useState(true);
-  const { createPage, updatePage, setCurrentPageId, getPageBreadcrumbs, refreshPages } = usePageContext();
+  const {
+    pages,
+    createPage,
+    updatePage,
+    setCurrentPageId,
+    getPageBreadcrumbs,
+    refreshPages,
+    toggleFavorite,
+    restorePage,
+  } = usePageContext();
 
   const [shareOpen, setShareOpen] = useState(false);
   const shareBtnRef = useRef<HTMLButtonElement | null>(null);
   const [shareAnchor, setShareAnchor] = useState<DOMRect | null>(null);
 
-  const [cover, setCover] = useState<string | null>(null);
-  const [isProj, setIsProj] = useState<boolean>(false);
+  // Trash banner state (only used while the opened page is in Trash).
+  const [restoring, setRestoring] = useState(false);
+  const [confirmForeverOpen, setConfirmForeverOpen] = useState(false);
+  const [deletingForever, setDeletingForever] = useState(false);
 
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const iconBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -45,18 +55,19 @@ export function PageView() {
     setCurrentPageId(id);
     setLoading(true);
 
-    setCover(getPageCover(id));
-    setIsProj(isProject(id));
-
-    api.pages.get(id).then(res => {
+    // includeTrashed: a page in Trash still opens (read-only, with a restore
+    // banner) instead of showing "not found".
+    api.pages.get(id, { includeTrashed: true }).then(res => {
       if (active) {
         setPage(res.page);
         setLoading(false);
-        addRecentPage({
-          id: res.page.id,
-          title: res.page.title,
-          icon: res.page.icon,
-        });
+        if (!res.page.deleted_at) {
+          addRecentPage({
+            id: res.page.id,
+            title: res.page.title,
+            icon: res.page.icon,
+          });
+        }
       }
     }).catch(err => {
       console.error(err);
@@ -69,19 +80,11 @@ export function PageView() {
     return () => { active = false; };
   }, [id, setCurrentPageId]);
 
-  useEffect(() => {
-    if (!id) return;
-    const handleCoverChange = () => setCover(getPageCover(id));
-    const handleProjectChange = () => setIsProj(isProject(id));
-
-    window.addEventListener(STORAGE_EVENTS.COVERS_CHANGED, handleCoverChange);
-    window.addEventListener(STORAGE_EVENTS.PROJECTS_CHANGED, handleProjectChange);
-
-    return () => {
-      window.removeEventListener(STORAGE_EVENTS.COVERS_CHANGED, handleCoverChange);
-      window.removeEventListener(STORAGE_EVENTS.PROJECTS_CHANGED, handleProjectChange);
-    };
-  }, [id]);
+  // `page.id === id` guards the first render after a route change, which still
+  // holds the previous page's content and must not trigger a restore.
+  const scrollContainerRef = useScrollContainer();
+  const contentReady = !loading && (page === null || page.id === id);
+  usePageScrollMemory(id, contentReady, scrollContainerRef, hash);
 
   if (loading) {
     return <div className="loading"><div className="spinner"></div></div>;
@@ -96,9 +99,20 @@ export function PageView() {
     );
   }
 
+  const isTrashed = Boolean(page.deleted_at);
+
+  // Page preferences live in the database. The page list in the context is
+  // kept current by updatePage (optimistic), so prefer it over the copy
+  // fetched when the page opened; a trashed page is only in the local copy.
+  const meta = pages.find(p => p.id === id) ?? page;
+  const isFavorite = meta.is_favorite;
+  const isFullWidth = meta.full_width;
+  const isProj = meta.is_project;
+  const cover = meta.cover;
+
   // Cover banner belongs exclusively to the project root page.
   // Subpages (parent_id !== null) and regular private notes do not get a banner.
-  const isProjectRoot = isProj && !page.parent_id;
+  const isProjectRoot = isProj && !page.parent_id && !isTrashed;
   const hasCover = isProjectRoot && Boolean(cover);
 
   const breadcrumbs = getPageBreadcrumbs(id);
@@ -108,6 +122,7 @@ export function PageView() {
   };
 
   const handleTitleBlur = () => {
+    if (isTrashed) return;
     updatePage(id, { title: page.title });
     addRecentPage({ id, title: page.title, icon: page.icon });
   };
@@ -115,6 +130,7 @@ export function PageView() {
   const handleTitleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      if (isTrashed) return;
       updatePage(id, { title: page.title });
       addRecentPage({ id, title: page.title, icon: page.icon });
     }
@@ -139,14 +155,48 @@ export function PageView() {
     setIconPickerOpen(true);
   };
 
+  // The context rolls the change back and rethrows if the save fails.
   const handleSetCover = (newCover: string | null) => {
-    setPageCover(id, newCover);
-    setCover(newCover);
+    updatePage(id, { cover: newCover }).catch(err => console.error('Failed to save cover', err));
   };
 
   const handleToggleProject = () => {
-    const nextStatus = toggleProject(id);
-    setIsProj(nextStatus);
+    updatePage(id, { is_project: !isProj }).catch(err => console.error('Failed to update project', err));
+  };
+
+  const handleToggleFavorite = () => {
+    toggleFavorite(id).catch(err => console.error('Failed to update favorite', err));
+  };
+
+  const handleToggleFullWidth = () => {
+    updatePage(id, { full_width: !isFullWidth }).catch(err => console.error('Failed to update layout', err));
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const restored = await restorePage(id);
+      // Back in the live tree, possibly moved to the root if its parent is
+      // still in Trash.
+      setPage(prev => (prev ? { ...prev, deleted_at: null, parent_id: restored.parent_id } : prev));
+    } catch (err) {
+      console.error('Failed to restore page', err);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleDeleteForever = async () => {
+    setDeletingForever(true);
+    try {
+      await api.pages.deletePermanent(id);
+      removeRecentPage(id);
+      setConfirmForeverOpen(false);
+      navigate('/');
+    } catch (err) {
+      console.error('Failed to delete page permanently', err);
+      setDeletingForever(false);
+    }
   };
 
   const handleExport = async () => {
@@ -184,7 +234,7 @@ export function PageView() {
   };
 
   return (
-    <div className={`page-view ${hasCover ? 'page-view--has-cover' : ''}`}>
+    <div className={`page-view ${hasCover ? 'page-view--has-cover' : ''} ${isFullWidth ? 'page-view--full-width' : ''}`}>
       {isProjectRoot && (
         <CoverBanner
           cover={cover}
@@ -210,7 +260,26 @@ export function PageView() {
           </div>
         )}
 
+        {!isTrashed && (
         <div className="page-actions">
+          <button
+            className={`page-action-btn page-action-btn--icon ${isFavorite ? 'page-action-btn--active' : ''}`}
+            onClick={handleToggleFavorite}
+            title={isFavorite ? t('favorites.remove') : t('favorites.add')}
+            aria-label={isFavorite ? t('favorites.remove') : t('favorites.add')}
+            aria-pressed={isFavorite}
+          >
+            {isFavorite ? <StarFilledIcon size={14} /> : <StarIcon size={14} />}
+          </button>
+          <button
+            className={`page-action-btn page-action-btn--icon ${isFullWidth ? 'page-action-btn--active' : ''}`}
+            onClick={handleToggleFullWidth}
+            title={isFullWidth ? t('page.standardWidth') : t('page.fullWidth')}
+            aria-label={isFullWidth ? t('page.standardWidth') : t('page.fullWidth')}
+            aria-pressed={isFullWidth}
+          >
+            <FullWidthIcon size={14} />
+          </button>
           {!page.parent_id && (
             <button
               className={`page-action-btn ${isProj ? 'page-action-btn--project-active' : ''}`}
@@ -243,7 +312,26 @@ export function PageView() {
             <span>{t('share.title')}</span>
           </button>
         </div>
+        )}
       </div>
+
+      {isTrashed && (
+        <div className="trash-banner" role="status">
+          <span className="trash-banner-text">{t('trash.banner')}</span>
+          <button className="trash-banner-btn" onClick={handleRestore} disabled={restoring}>
+            <RestoreIcon size={13} />
+            <span>{t('trash.restore')}</span>
+          </button>
+          <button
+            className="trash-banner-btn trash-banner-btn--danger"
+            onClick={() => setConfirmForeverOpen(true)}
+            disabled={restoring}
+          >
+            <TrashIcon size={13} />
+            <span>{t('trash.deleteForever')}</span>
+          </button>
+        </div>
+      )}
 
       <SharePopover
         pageId={id}
@@ -280,18 +368,42 @@ export function PageView() {
           className="page-title"
           placeholder={t('page.titlePlaceholder')}
           value={page.title}
+          readOnly={isTrashed}
           onChange={handleTitleChange}
           onBlur={handleTitleBlur}
           onKeyDown={handleTitleKeyDown}
         />
       </div>
 
-      <BlockEditor
-        pageId={id}
-        initialBlocks={page.blocks || []}
-      />
+      {isTrashed ? (
+        <>
+          {/* Read-only preview: the editor would write to a page in Trash. */}
+          <div className="trash-preview">
+            {(page.blocks || [])
+              .filter(b => b.type !== 'subpage')
+              .map(b => <ReadOnlyBlock key={b.id} block={b} shareToken="" />)}
+          </div>
+          <ConfirmDialog
+            open={confirmForeverOpen}
+            title={t('trash.confirmDeleteTitle', { title: page.title || t('sidebar.untitledPage') })}
+            description={t('trash.confirmDeleteBody')}
+            confirmLabel={t('trash.deleteForever')}
+            confirmTone="danger"
+            loading={deletingForever}
+            onConfirm={handleDeleteForever}
+            onCancel={() => { if (!deletingForever) setConfirmForeverOpen(false); }}
+          />
+        </>
+      ) : (
+        <>
+          <BlockEditor
+            pageId={id}
+            initialBlocks={page.blocks || []}
+          />
 
-      <DocumentOutline blocks={page.blocks || []} />
+          <DocumentOutline blocks={page.blocks || []} />
+        </>
+      )}
     </div>
   );
 }

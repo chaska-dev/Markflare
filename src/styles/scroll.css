@@ -1,0 +1,25 @@
+/* Scroll behaviour: page scroll restore, popover positioning, viewport units. */
+
+/* Main scroller: .main-content is the real scroll container, not window. */
+.main-content {
+  overscroll-behavior: contain;
+  /* Anchored blocks (#block-<id>, outline clicks) should not sit glued to the top. */
+  scroll-padding-top: 64px;
+  /* Reserve the scrollbar track so content does not shift when it outgrows the viewport. */
+  scrollbar-gutter: stable;
+}
+
+/* Mobile drawer open: the body lock alone does nothing because .main-content scrolls. */
+html.sidebar-scroll-locked .main-content {
+  overflow-y: hidden;
+}
+
+.page-list {
+  overscroll-behavior: contain;
+}
+
+/* Rendered in a portal with viewport coordinates (see SlashMenu.tsx). */
+.slash-menu {
+  position: fixed;
+  overscroll-behavior: contain;
+}

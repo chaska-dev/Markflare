@@ -8,6 +8,7 @@ import {
   LogOutIcon,
   UserIcon,
   KeyIcon,
+  LockIcon,
 } from './Icons';
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   onOpenWorkspaceSettings: () => void;
   onOpenColorPicker: () => void;
   onOpenApiToken: () => void;
+  onOpenChangePassword: () => void;
+  onOpenAdminUsers: () => void;
 }
 
 export function UserMenuPopover({
@@ -24,14 +27,16 @@ export function UserMenuPopover({
   onOpenWorkspaceSettings,
   onOpenColorPicker,
   onOpenApiToken,
+  onOpenChangePassword,
+  onOpenAdminUsers,
 }: Props) {
-  const { username, logout } = useAuth();
+  const { username, user, logout } = useAuth();
   const { theme, iconColorMode, customIconColor } = useTheme();
   const { t } = useLanguage();
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  const displayName = username || 'Invitado';
-  const role = username === 'admin' ? t('sidebar.adminRole') : t('sidebar.userRole');
+  const displayName = user?.displayName || username || 'Invitado';
+  const role = user?.isAdmin ? t('sidebar.adminRole') : t('sidebar.userRole');
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +80,38 @@ export function UserMenuPopover({
         <div className="user-menu-divider" />
 
         <div className="user-menu-list">
+          <button
+            type="button"
+            className="user-menu-item"
+            role="menuitem"
+            onClick={() => {
+              onClose();
+              onOpenChangePassword();
+            }}
+          >
+            <div className="user-menu-item-icon">
+              <LockIcon size={16} />
+            </div>
+            <span className="user-menu-item-label">{t('userMenu.changePassword')}</span>
+          </button>
+
+          {user?.isAdmin && (
+            <button
+              type="button"
+              className="user-menu-item"
+              role="menuitem"
+              onClick={() => {
+                onClose();
+                onOpenAdminUsers();
+              }}
+            >
+              <div className="user-menu-item-icon">
+                <UserIcon size={16} />
+              </div>
+              <span className="user-menu-item-label">{t('userMenu.adminUsers')}</span>
+            </button>
+          )}
+
           <button
             type="button"
             className="user-menu-item"

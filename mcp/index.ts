@@ -8,10 +8,10 @@ import * as path from 'node:path';
 // Read config from env or .dev.vars
 function getEnvConfig() {
   const env = process.env;
-  let url = env.MARKFLARE_URL || 'http://localhost:3000';
-  let apiToken = env.MARKFLARE_API_TOKEN || env.MARKFLARE_TOKEN;
-  let username = env.MARKFLARE_USERNAME || env.AUTH_USERNAME;
-  let password = env.MARKFLARE_PASSWORD || env.AUTH_PASSWORD;
+  let url = env.PARASTI_URL || 'http://localhost:3000';
+  let apiToken = env.PARASTI_API_TOKEN || env.PARASTI_TOKEN;
+  let username = env.PARASTI_USERNAME || env.AUTH_USERNAME;
+  let password = env.PARASTI_PASSWORD || env.AUTH_PASSWORD;
 
   if (!apiToken && (!username || !password)) {
     const searchPaths = [
@@ -33,10 +33,10 @@ function getEnvConfig() {
           if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
             v = v.slice(1, -1);
           }
-          if (k === 'MARKFLARE_API_TOKEN' && !apiToken) apiToken = v;
+          if (k === 'PARASTI_API_TOKEN' && !apiToken) apiToken = v;
           if (k === 'AUTH_USERNAME' && !username) username = v;
           if (k === 'AUTH_PASSWORD' && !password) password = v;
-          if (k === 'MARKFLARE_URL' && env.MARKFLARE_URL === undefined) url = v;
+          if (k === 'PARASTI_URL' && env.PARASTI_URL === undefined) url = v;
         }
       }
     }
@@ -54,6 +54,9 @@ const config = getEnvConfig();
 let cachedToken: string | null = config.apiToken;
 let tokenExpiresAt = config.apiToken ? Infinity : 0;
 
+// PARASTI_API_TOKEN wins when present: each account has its own token and only
+// sees its owner's data. The username/password path stays as a fallback for
+// local runs that have not created a token yet.
 async function getAuthToken(): Promise<string> {
   if (config.apiToken) {
     return config.apiToken;
@@ -75,7 +78,7 @@ async function getAuthToken(): Promise<string> {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Markflare authentication failed (${res.status}): ${errText}`);
+    throw new Error(`Parasti authentication failed (${res.status}): ${errText}`);
   }
 
   const data = (await res.json()) as { token: string; expiresAt?: number };
@@ -110,22 +113,105 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Markflare API error [${res.status}] ${endpoint}: ${text}`);
+    throw new Error(`Parasti API error [${res.status}] ${endpoint}: ${text}`);
   }
 
   return (await res.json()) as T;
 }
 
+// Supported image types for upload_image. The server stores the multipart
+// part's MIME type, and the UI picks an image block from it.
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+};
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  page_id?: string | null;
+  created_at?: string;
+  url: string;
+}
+
+// POST /api/files/upload is multipart, which the JSON-only apiRequest cannot
+// send. Auth still comes from getAuthToken, and a 401 retries once like above.
+async function uploadFile(filePath: string, pageId: string | null): Promise<UploadedFile> {
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  const ext = path.extname(resolved).toLowerCase();
+  const mime = IMAGE_MIME_TYPES[ext];
+  if (!mime) {
+    throw new Error(`Unsupported image type: ${ext || '(no extension)'}`);
+  }
+
+  const bytes = fs.readFileSync(resolved);
+  if (bytes.length > MAX_UPLOAD_BYTES) {
+    throw new Error('File too large (max 25MB)');
+  }
+
+  const buildForm = () => {
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: mime }), path.basename(resolved));
+    if (pageId) form.append('page_id', pageId);
+    return form;
+  };
+
+  const send = async () => {
+    const token = await getAuthToken();
+    return fetch(`${config.url}/api/files/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: buildForm(),
+    });
+  };
+
+  let res = await send();
+  if (res.status === 401) {
+    cachedToken = null;
+    res = await send();
+  }
+
+  if (!res.ok) {
+    throw new Error(`Parasti API error [${res.status}] /api/files/upload: ${await res.text()}`);
+  }
+
+  const data = (await res.json()) as { file: UploadedFile };
+  return data.file;
+}
+
+// Same insertion rules as src/utils/blockTree.ts positionBetween, so images
+// land where the editor itself would put them.
+function positionBetween(prev?: number, next?: number): number {
+  if (prev === undefined && next === undefined) return 1000;
+  if (prev === undefined) return next! - 1000;
+  if (next === undefined) return prev + 1000;
+  return (prev + next) / 2;
+}
+
 // Create MCP server instance
 const server = new McpServer({
-  name: 'markflare-mcp',
+  name: 'parasti-mcp',
   version: '1.0.0',
 });
 
 // Tool: import_markdown
 server.tool(
   'import_markdown',
-  'Import raw Markdown content into Markflare as a new page with parsed blocks.',
+  'Import raw Markdown content into Parasti as a new page with parsed blocks.',
   {
     markdown: z.string().describe('The markdown content to import'),
     title: z.string().optional().describe('Optional title for the page. If omitted, will be extracted from the first # H1 header or titled "Untitled"'),
@@ -147,7 +233,7 @@ server.tool(
         content: [
           {
             type: 'text',
-            text: `Successfully created page "${page.title}" (ID: ${page.id}) in Markflare with ${page.blocks?.length || 0} blocks.\nView at: ${config.url}/page/${page.id}`,
+            text: `Successfully created page "${page.title}" (ID: ${page.id}) in Parasti with ${page.blocks?.length || 0} blocks.\nView at: ${config.url}/page/${page.id}`,
           },
         ],
       };
@@ -163,7 +249,7 @@ server.tool(
 // Tool: import_markdown_file
 server.tool(
   'import_markdown_file',
-  'Read a local .md file and import it into Markflare as a new page.',
+  'Read a local .md file and import it into Parasti as a new page.',
   {
     filePath: z.string().describe('Absolute or relative path to the .md file'),
     title: z.string().optional().describe('Optional title for the page. If omitted, uses the filename without extension or first header.'),
@@ -212,7 +298,7 @@ server.tool(
 // Tool: list_pages
 server.tool(
   'list_pages',
-  'List all pages in Markflare workspace to inspect the hierarchy and obtain page IDs.',
+  'List all pages in Parasti workspace to inspect the hierarchy and obtain page IDs.',
   {},
   async () => {
     try {
@@ -226,8 +312,9 @@ server.tool(
 
       const lines = pages.map((p) => {
         const icon = p.icon || '📄';
+        const projectTag = p.is_project ? ' [project]' : '';
         const parentInfo = p.parent_id ? ` (parent: ${p.parent_id})` : ' (root)';
-        return `- ${icon} [${p.title}] (ID: ${p.id})${parentInfo}`;
+        return `- ${icon} [${p.title}] (ID: ${p.id})${projectTag}${parentInfo}`;
       });
 
       return {
@@ -250,7 +337,7 @@ server.tool(
 // Tool: search_pages
 server.tool(
   'search_pages',
-  'Search for pages or block contents in Markflare.',
+  'Search for pages or block contents in Parasti.',
   {
     query: z.string().describe('Search query string'),
   },
@@ -313,13 +400,420 @@ server.tool(
   }
 );
 
+// Tool: create_event
+server.tool(
+  'create_event',
+  'Create a calendar event in Parasti. Times are wall-clock HH:MM strings; omit both for an all-day event.',
+  {
+    title: z.string().describe('Event title'),
+    event_date: z.string().describe('Event date in YYYY-MM-DD format'),
+    start_time: z.string().optional().describe('Start time in HH:MM (24h). Omit for an all-day event.'),
+    end_time: z.string().optional().describe('End time in HH:MM (24h). Omit for an all-day event.'),
+  },
+  async ({ title, event_date, start_time, end_time }) => {
+    try {
+      const res = await apiRequest<{ event: any }>('/api/events', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          event_date,
+          start_time: start_time?.trim() || null,
+          end_time: end_time?.trim() || null,
+        }),
+      });
+
+      const event = res.event;
+      const time = event.start_time
+        ? event.end_time
+          ? `${event.start_time}-${event.end_time}`
+          : event.start_time
+        : 'all-day';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Created event "${event.title}" on ${event.event_date} at ${time} (ID: ${event.id})`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to create event: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: list_events
+server.tool(
+  'list_events',
+  'List calendar events in Parasti. Provide both from and to (YYYY-MM-DD) to filter a date range, or omit both to list every event.',
+  {
+    from: z.string().optional().describe('Start date of the range, inclusive, in YYYY-MM-DD format. Requires to.'),
+    to: z.string().optional().describe('End date of the range, inclusive, in YYYY-MM-DD format. Requires from.'),
+  },
+  async ({ from, to }) => {
+    try {
+      const hasFrom = Boolean(from && from.trim());
+      const hasTo = Boolean(to && to.trim());
+      // The API rejects a range with only one bound, so ask for both instead of
+      // passing through a guaranteed 400.
+      if (hasFrom !== hasTo) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: 'Provide both "from" and "to" (YYYY-MM-DD), or omit both to list every event.' }],
+        };
+      }
+
+      const query = hasFrom
+        ? `?from=${encodeURIComponent(from!.trim())}&to=${encodeURIComponent(to!.trim())}`
+        : '';
+      const res = await apiRequest<{ events: any[] }>(`/api/events${query}`);
+      const events = res.events || [];
+      if (events.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No events found.' }],
+        };
+      }
+
+      const lines = events.map((e) => {
+        const time = e.start_time
+          ? e.end_time
+            ? `${e.start_time}-${e.end_time}`
+            : e.start_time
+          : 'all-day';
+        return `- ${e.event_date} ${time} ${e.title} (ID: ${e.id})`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Events (${events.length}):\n${lines.join('\n')}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to list events: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: update_event
+server.tool(
+  'update_event',
+  'Update a calendar event in Parasti. Replace total: semua field harus diisi. Bukan partial update.',
+  {
+    eventId: z.string().describe('ID of the event to update'),
+    title: z.string().describe('New event title'),
+    event_date: z.string().describe('New event date in YYYY-MM-DD format'),
+    start_time: z.string().optional().describe('New start time in HH:MM (24h). Omit for an all-day event.'),
+    end_time: z.string().optional().describe('New end time in HH:MM (24h). Omit for an all-day event.'),
+  },
+  async ({ eventId, title, event_date, start_time, end_time }) => {
+    try {
+      const res = await apiRequest<{ event: any }>(`/api/events/${encodeURIComponent(eventId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title,
+          event_date,
+          start_time: start_time?.trim() || null,
+          end_time: end_time?.trim() || null,
+        }),
+      });
+
+      const event = res.event;
+      const time = event.start_time
+        ? event.end_time
+          ? `${event.start_time}-${event.end_time}`
+          : event.start_time
+        : 'all-day';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Updated event "${event.title}" on ${event.event_date} at ${time} (ID: ${event.id})`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to update event: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: delete_event
+server.tool(
+  'delete_event',
+  'Delete a calendar event permanently. DESTRUKTIF dan permanen. Hanya panggil setelah user mengkonfirmasi.',
+  {
+    eventId: z.string().describe('ID of the event to delete'),
+  },
+  async ({ eventId }) => {
+    try {
+      const res = await apiRequest<{ success: boolean; deleted: number }>(
+        `/api/events/${encodeURIComponent(eventId)}`,
+        { method: 'DELETE' }
+      );
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Deleted event ${eventId}. Response: ${JSON.stringify(res)}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to delete event: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: create_project
+server.tool(
+  'create_project',
+  'Create a project in Parasti: a root page flagged as a project.',
+  {
+    title: z.string().describe('Project title'),
+    icon: z.string().max(32).optional().describe('Optional emoji or icon, max 32 characters. Defaults to 📁.'),
+  },
+  async ({ title, icon }) => {
+    try {
+      const res = await apiRequest<{ page: any }>('/api/pages', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          icon: icon || '📁',
+          parent_id: null,
+        }),
+      });
+
+      const page = res.page;
+      try {
+        // POST /api/pages cannot set is_project; only PUT accepts the flag.
+        await apiRequest(`/api/pages/${encodeURIComponent(page.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ is_project: true }),
+        });
+      } catch (err: any) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Page "${page.title}" was created as a normal page (ID: ${page.id}), but marking it as a project failed: ${err.message}`,
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Created project "${page.title}" (ID: ${page.id})\nView at: ${config.url}/page/${page.id}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to create project: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: list_projects
+server.tool(
+  'list_projects',
+  'List all projects in Parasti (root pages flagged as projects).',
+  {},
+  async () => {
+    try {
+      const res = await apiRequest<{ pages: any[] }>('/api/pages');
+      const projects = (res.pages || []).filter((p) => p.is_project === true && p.parent_id === null);
+      if (projects.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No projects found.' }],
+        };
+      }
+
+      const lines = projects.map((p) => `- ${p.icon || '📁'} ${p.title} (ID: ${p.id})`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Projects (${projects.length}):\n${lines.join('\n')}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to list projects: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: create_page
+server.tool(
+  'create_page',
+  'Create an empty page in Parasti. Pass parentId to make it a sub-page of a project or private page; omit parentId for a root page.',
+  {
+    title: z.string().describe('Page title'),
+    icon: z.string().max(32).optional().describe('Optional emoji or icon, max 32 characters.'),
+    parentId: z.string().optional().describe('Optional parent page ID. Omit to create a root page.'),
+  },
+  async ({ title, icon, parentId }) => {
+    try {
+      const parent = parentId?.trim() || null;
+      if (parent) {
+        try {
+          await apiRequest(`/api/pages/${encodeURIComponent(parent)}`);
+        } catch {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'Parent page ID tidak ditemukan. Jalankan list_pages atau list_projects dulu untuk mengambil ID yang benar.',
+              },
+            ],
+          };
+        }
+      }
+
+      const res = await apiRequest<{ page: any }>('/api/pages', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          icon: icon || undefined,
+          parent_id: parent,
+        }),
+      });
+
+      const page = res.page;
+      const location = parent ? `under parent ${parent}` : 'at root level';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Created page "${page.title}" (ID: ${page.id}) ${location}\nView at: ${config.url}/page/${page.id}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to create page: ${err.message}` }],
+      };
+    }
+  }
+);
+
+// Tool: upload_image
+server.tool(
+  'upload_image',
+  'Upload a local image file into a Parasti page as an image block. Insert it after a given block, at an index, or append it at the end.',
+  {
+    filePath: z.string().describe('Path to a local image file (png, jpg, jpeg, gif, webp, svg, bmp, avif)'),
+    pageId: z.string().describe('ID of the page that will receive the image'),
+    afterBlockId: z.string().optional().describe('Insert the image right after this block ID'),
+    positionIndex: z.number().int().min(0).optional().describe('Insert the image before the block at this 0-based index'),
+    caption: z.string().optional().describe('Optional caption stored in props.caption'),
+    alt: z.string().optional().describe('Optional alt text stored in the block language field'),
+  },
+  async ({ filePath, pageId, afterBlockId, positionIndex, caption, alt }) => {
+    try {
+      let pageRes: { page: any };
+      try {
+        pageRes = await apiRequest<{ page: any }>(`/api/pages/${encodeURIComponent(pageId)}`);
+      } catch {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: 'Page ID tidak ditemukan. Jalankan list_pages dulu untuk mengambil ID yang benar.',
+            },
+          ],
+        };
+      }
+
+      const blocks: any[] = pageRes.page?.blocks || [];
+      let position: number;
+      if (afterBlockId) {
+        const index = blocks.findIndex((b) => b.id === afterBlockId);
+        if (index === -1) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: 'Block ID tidak ditemukan di halaman ini. Jalankan get_page untuk melihat ID blok yang valid.',
+              },
+            ],
+          };
+        }
+        position = positionBetween(blocks[index].position, blocks[index + 1]?.position);
+      } else if (positionIndex !== undefined) {
+        const index = Math.min(positionIndex, blocks.length);
+        position = positionBetween(blocks[index - 1]?.position, blocks[index]?.position);
+      } else {
+        position = positionBetween(blocks[blocks.length - 1]?.position, undefined);
+      }
+
+      const file = await uploadFile(filePath, pageId);
+      const props: Record<string, unknown> = {};
+      if (caption) props.caption = caption;
+
+      const blockRes = await apiRequest<{ block: any }>(`/api/pages/${encodeURIComponent(pageId)}/blocks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'image',
+          content: file.id,
+          position,
+          language: alt || '',
+          props,
+        }),
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Uploaded image "${file.name}" (${file.size} bytes) into page ${pageId} as image block ${blockRes.block.id} at position ${position}.\nImage URL: ${config.url}${file.url}\nView page: ${config.url}/page/${pageId}`,
+          },
+        ],
+      };
+    } catch (err: any) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Failed to upload image: ${err.message}` }],
+      };
+    }
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[markflare-mcp] Server running on stdio');
+  console.error('[parasti-mcp] Server running on stdio');
 }
 
 main().catch((err) => {
-  console.error('[markflare-mcp] Fatal error:', err);
+  console.error('[parasti-mcp] Fatal error:', err);
   process.exit(1);
 });

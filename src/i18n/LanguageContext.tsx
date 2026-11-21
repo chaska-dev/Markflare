@@ -79,10 +79,3 @@ export function useLanguage(): LanguageContextValue {
   if (!ctx) throw new Error('useLanguage must be used within LanguageProvider');
   return ctx;
 }
-
-// Helper para casos donde solo necesitás el dict (raro, casi siempre conviene useLanguage).
-export function getTranslationFunction(language: Language) {
-  const dict = dictionaries[language];
-  return (key: string, vars?: Record<string, string | number>) =>
-    interpolate((dict[key] ?? dictionaries[DEFAULT_LANGUAGE][key] ?? key) as string, vars);
-}

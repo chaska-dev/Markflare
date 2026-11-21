@@ -3,6 +3,8 @@
 // así no duplicamos lógica en dos archivos. Mantenerlo puro (sin I/O) y
 // determinístico.
 
+import { parseBlockProps } from './blockProps';
+
 export type ParsedBlock = {
   type: string;
   content: string;
@@ -36,8 +38,9 @@ function splitTableRow(line: string): string[] {
     .trim()
     .replace(/^\|/, '')
     .replace(/\|$/, '')
-    .split('|')
-    .map(c => stripEmphasis(c.trim()));
+    .split(/(?<!\\)\|/)
+    // Cells render inline markdown (bold, links, code), so it is kept as is.
+    .map(c => c.trim().replace(/\\\|/g, '|'));
 }
 
 function parseTable(lines: string[]): { columns: string[]; rows: string[][] } {
@@ -96,6 +99,8 @@ function preprocessImports(rawLines: string[]): ImportToken[] {
       const match = line.trim().match(/^```([a-zA-Z0-9_-]*)/);
       const language = match ? match[1] : '';
       const codeLines: string[] = [];
+      // Emit pending lines first so the blocks keep their document order.
+      flushLines();
       i++;
       while (i < rawLines.length && !rawLines[i].trim().startsWith('```')) {
         codeLines.push(rawLines[i]);
@@ -119,6 +124,7 @@ function preprocessImports(rawLines: string[]): ImportToken[] {
       }
       const imgMatch = pHtml.match(/<img\s+[^>]*src=["']([^"']+)["'][^>]*>/i);
       if (imgMatch) {
+        flushLines();
         const src = imgMatch[1];
         const altMatch = pHtml.match(/alt=["']([^"']+)["']/i);
         const alt = altMatch ? altMatch[1] : '';
@@ -164,7 +170,8 @@ function preprocessImports(rawLines: string[]): ImportToken[] {
     // ASCII art block: look ahead — if the next 2+ non-blank lines have 2+
     // consecutive spaces somewhere, it's probably layout. Requires at least
     // 2 lines so we don't convert normal paragraphs into code.
-    const isAsciiArtish = (s: string) => / {2,}/.test(s);
+    // Leading indentation doesn't count: nested list items are indented too.
+    const isAsciiArtish = (s: string) => /\S {2,}/.test(s);
     let j = i;
     let artLines: string[] = [];
     let artHits = 0;
@@ -406,4 +413,166 @@ export function parseMarkdownToBlocks(markdown: string, fallbackTitle: string): 
   }
 
   return { blocks, detectedTitle };
+}
+
+// Block tree → markdown (the inverse of parseMarkdownToBlocks, as far as
+// markdown can express each block). Shared by both backends' export route.
+export type ExportBlock = {
+  // blocks.props: the raw JSON text from the DB, or the already-parsed object.
+  props?: unknown;
+  id: string;
+  type: string;
+  content: string;
+  checked?: number | boolean;
+  language?: string | null;
+  parent_id?: string | null;
+  position?: number;
+};
+
+// Image/file blocks point at an uploaded file id; imported images may already
+// hold a full URL, which is kept as-is.
+function fileHref(content: string): string {
+  return /^(https?:|data:)/i.test(content) ? content : `/api/files/${content}`;
+}
+
+function propsOf(block: ExportBlock): Record<string, unknown> | null | undefined {
+  return typeof block.props === 'string' ? parseBlockProps(block.props) : (block.props as Record<string, unknown> | null | undefined);
+}
+
+// The image, plus its caption (props.caption) as an italic line right below.
+function imageToMarkdown(block: ExportBlock, content: string): string {
+  const image = `![${linkText(block.language || '', 'image')}](${fileHref(content)})`;
+  const props = propsOf(block);
+  const caption = typeof props?.caption === 'string' ? props.caption.replace(/\s+/g, ' ').trim() : '';
+  return caption ? `${image}\n_${caption.replace(/[\\_*]/g, '\\$&')}_` : image;
+}
+
+// Brackets would end the link text early.
+function linkText(text: string, fallback: string): string {
+  return (text || '').replace(/[\[\]]/g, '').trim() || fallback;
+}
+
+// Web bookmark and embed blocks hold a URL: both export as a link to it. A
+// bookmark is titled with the page title its preview cached (props.preview), an
+// embed shows the address. Parentheses and spaces would end the link target.
+function webLinkToMarkdown(block: ExportBlock, content: string): string {
+  const url = content.trim();
+  if (!/^https?:\/\//i.test(url)) return url;
+  const preview = block.type === 'bookmark' ? propsOf(block)?.preview : null;
+  const cachedTitle = preview && typeof preview === 'object' ? (preview as Record<string, unknown>).title : null;
+  const href = url.replace(/[()\s]/g, c => (c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c)));
+  return `[${linkText(typeof cachedTitle === 'string' ? cachedTitle : '', url)}](${href})`;
+}
+
+function tableToMarkdown(content: string): string | null {
+  let data: any;
+  try { data = JSON.parse(content); } catch { return null; }
+  const columns: string[] = Array.isArray(data?.columns) ? data.columns.map((c: unknown) => String(c ?? '')) : [];
+  if (columns.length === 0) return null;
+  const rows: unknown[][] = Array.isArray(data?.rows) ? data.rows.filter(Array.isArray) : [];
+  const cell = (v: unknown) => String(v ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  const line = (cells: unknown[]) => `| ${columns.map((_, i) => cell(cells[i])).join(' | ')} |`;
+  return [
+    line(columns),
+    `| ${columns.map(() => '---').join(' | ')} |`,
+    ...rows.map(line),
+  ].join('\n');
+}
+
+// Markdown for one block (may span several lines). `index` is its 1-based
+// place in the current run of numbered siblings.
+function blockToMarkdown(block: ExportBlock, index: number): string {
+  const content = block.content ?? '';
+  switch (block.type) {
+    case 'heading1': return `# ${content}`;
+    case 'heading2': return `## ${content}`;
+    case 'heading3': return `### ${content}`;
+    case 'bullet_list': return `- ${content}`;
+    case 'numbered_list': return `${index}. ${content}`;
+    case 'toggle': return `- ${content}`;
+    case 'todo': return `- [${block.checked ? 'x' : ' '}] ${content}`;
+    case 'code': return `\`\`\`${block.language || ''}\n${content}\n\`\`\``;
+    case 'math': return `$$\n${content}\n$$`;
+    case 'quote': return `> ${content}`;
+    case 'divider': return '---';
+    case 'callout': return `> 💡 ${content}`;
+    case 'image': return imageToMarkdown(block, content);
+    case 'bookmark':
+    case 'embed': return webLinkToMarkdown(block, content);
+    case 'file': return `[${linkText(block.language || '', 'file')}](${fileHref(content)})`;
+    case 'table': return tableToMarkdown(content) ?? '';
+    // The block only holds the child page id; the title would need a lookup.
+    case 'subpage': return `[Subpage](/page/${content})`;
+    case 'paragraph':
+    default:
+      return content;
+  }
+}
+
+// Blocks that are list items in markdown. Runs of them stay on adjacent lines
+// (a tight list); every other block is a paragraph-level element and needs a
+// blank line around it, or markdown merges it with its neighbours (a paragraph
+// right after a table becomes one more table row, two paragraphs become one).
+const LIST_LIKE = new Set(['bullet_list', 'numbered_list', 'todo', 'toggle']);
+
+// Column layout has no markdown form: the blocks of a column_list come out one
+// column after another, as if they were at the level of the list itself.
+const COLUMN_CONTAINERS = new Set(['column_list', 'column']);
+
+export function blocksToMarkdown(blocks: ExportBlock[]): string {
+  // Group children under their parent, ordered by position. A block whose
+  // parent is missing from the list is treated as a root block.
+  const ids = new Set(blocks.map(b => b.id));
+  const children = new Map<string | null, ExportBlock[]>();
+  for (const b of blocks) {
+    const key = b.parent_id && ids.has(b.parent_id) && b.parent_id !== b.id ? b.parent_id : null;
+    const list = children.get(key);
+    if (list) list.push(b); else children.set(key, [b]);
+  }
+  for (const list of children.values()) list.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+  let out = '';
+  // The next block starts a new paragraph even if it is a list item next to
+  // one: set after an empty block, which markdown can only show as a gap.
+  let breakNext = false;
+  const visited = new Set<string>();
+  const walk = (parent: ExportBlock | null, depth: number) => {
+    const indent = '  '.repeat(depth);
+    let numbered = 0;
+    let prev: ExportBlock | null = null;
+    for (const block of children.get(parent ? parent.id : null) ?? []) {
+      if (visited.has(block.id)) continue;
+      visited.add(block.id);
+      if (COLUMN_CONTAINERS.has(block.type)) {
+        // Set apart from what comes before and after, even from list items.
+        breakNext = true;
+        walk(block, depth);
+        numbered = 0;
+        breakNext = true;
+        prev = null;
+        continue;
+      }
+      // Numbering restarts per sibling group and after any other block.
+      numbered = block.type === 'numbered_list' ? numbered + 1 : 0;
+      const md = blockToMarkdown(block, numbered);
+      // Tables with no columns and other empty renderings are dropped, and so
+      // are empty paragraphs: the blank line between blocks already is the gap.
+      if (md === '') {
+        breakNext = true;
+        prev = null;
+      } else {
+        // Tight only between list items, and for the first child of a list
+        // item (it hangs under its parent). Everything else is set apart.
+        const tight = out !== '' && !breakNext
+          && (prev ? LIST_LIKE.has(prev.type) && LIST_LIKE.has(block.type) : parent !== null && LIST_LIKE.has(parent.type));
+        const text = md.split('\n').map(l => (l ? indent + l : l)).join('\n');
+        out += out === '' ? text : (tight ? '\n' : '\n\n') + text;
+        breakNext = false;
+        prev = block;
+      }
+      walk(block, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
 }

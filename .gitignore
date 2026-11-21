@@ -20,15 +20,20 @@ uploads/
 
 # Logs
 *.log
-.run-logs/
 
 # Scratch / test junk
-_debug_scratch/
-elementos_testing/
 scripts/
+
+# Graphify knowledge graph output
+graphify-out/
+
+# Agent config
+.claude/
+.opencode/
 
 # OS / editor junk
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+.obsidian/

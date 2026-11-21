@@ -1,4 +1,4 @@
--- Markflare Database Schema
+-- Parasti Database Schema
 -- Pages, blocks (with optional parent_id + collapsed), and the indexes
 -- the API uses for tree-shaped queries.
 

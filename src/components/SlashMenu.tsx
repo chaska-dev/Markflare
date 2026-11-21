@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BLOCK_TYPES, BlockType } from '../types';
 import {
   TextIcon,
@@ -16,14 +17,27 @@ import {
   TableIcon,
   ChevronRightSmallIcon,
   MathIcon,
+  BookmarkIcon,
+  EmbedIcon,
+  ColumnsIcon,
 } from './Icons';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useScrollContainer } from '../hooks/useScrollContainer';
+
+const MENU_MAX_HEIGHT = 320;
+const MENU_WIDTH = 280;
+const VIEWPORT_MARGIN = 8;
+const ANCHOR_GAP = 8;
 
 interface Props {
+  // Viewport coordinates of the bottom-left corner of the block being typed in.
   position: { top: number; left: number };
   query: string;
-  onSelect: (type: BlockType) => void;
+  // `columns` comes with the column_list entries (how many to create).
+  onSelect: (type: BlockType, columns?: number) => void;
   onClose: () => void;
+  // False inside a column, where lists of columns can't go.
+  allowColumns?: boolean;
 }
 
 // Mapea el `icon` string (definido en BLOCK_TYPES) al componente SVG
@@ -63,18 +77,32 @@ function SlashIcon({ name }: { name: string }) {
       return <ChevronRightSmallIcon size={size} />;
     case 'math':
       return <MathIcon size={size} />;
+    case 'bookmark':
+      return <BookmarkIcon size={size} />;
+    case 'embed':
+      return <EmbedIcon size={size} />;
+    case 'columns':
+      return <ColumnsIcon size={size} />;
     default:
       return <TextIcon size={size} />;
   }
 }
 
-export function SlashMenu({ position, query, onSelect, onClose }: Props) {
+export function SlashMenu({ position, query, onSelect, onClose, allowColumns = true }: Props) {
   const { t } = useLanguage();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
+  // Only follow the selection with scrollIntoView for keyboard moves; on hover
+  // it would nudge the list under the pointer.
+  const keyboardNavRef = useRef(false);
+  const scrollContainerRef = useScrollContainer();
+  const [placement, setPlacement] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   // Filtramos comparando contra los strings traducidos en el idioma actual,
   // más los fallbacks en español (por si alguien renderiza sin contexto).
   const filtered = BLOCK_TYPES.filter(item => {
+    if (item.columns !== undefined && !allowColumns) return false;
     const labelTranslated = t(item.labelKey).toLowerCase();
     const descTranslated = t(item.descriptionKey).toLowerCase();
     const q = query.toLowerCase();
@@ -89,17 +117,71 @@ export function SlashMenu({ position, query, onSelect, onClose }: Props) {
   }, [query]);
 
   useEffect(() => {
+    if (!keyboardNavRef.current) return;
+    keyboardNavRef.current = false;
+    activeItemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
+  // Position in viewport coordinates, flipping above the block when there is
+  // no room below. `position` is captured at the moment the menu opens, so if
+  // .main-content scrolls afterwards we shift by the scroll delta instead of
+  // closing the menu (typing near the bottom makes the browser scroll too).
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const container = scrollContainerRef.current;
+    const baseScroll = container?.scrollTop ?? 0;
+    // The focused element is the block being typed in; its height tells where
+    // the block starts, which is the anchor when flipping above.
+    const blockHeight = (document.activeElement as HTMLElement | null)?.getBoundingClientRect().height || 28;
+
+    const place = () => {
+      const dy = (container?.scrollTop ?? 0) - baseScroll;
+      const anchorBottom = position.top - dy;
+      const anchorTop = anchorBottom - blockHeight;
+      // +2 for the 1px border; scrollHeight excludes it.
+      const natural = Math.min(MENU_MAX_HEIGHT, menu.scrollHeight + 2);
+      const below = window.innerHeight - anchorBottom - ANCHOR_GAP - VIEWPORT_MARGIN;
+      const above = anchorTop - ANCHOR_GAP - VIEWPORT_MARGIN;
+      const flip = natural > below && above > below;
+      const maxHeight = Math.max(120, Math.min(MENU_MAX_HEIGHT, flip ? above : below));
+      const height = Math.min(natural, maxHeight);
+      const top = flip ? anchorTop - ANCHOR_GAP - height : anchorBottom + ANCHOR_GAP;
+      const left = Math.max(
+        VIEWPORT_MARGIN,
+        Math.min(position.left, window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN),
+      );
+      setPlacement(prev =>
+        prev && prev.top === top && prev.left === left && prev.maxHeight === maxHeight
+          ? prev
+          : { top, left, maxHeight },
+      );
+    };
+
+    place();
+    container?.addEventListener('scroll', place, { passive: true });
+    window.addEventListener('resize', place);
+    return () => {
+      container?.removeEventListener('scroll', place);
+      window.removeEventListener('resize', place);
+    };
+    // filtered.length: the menu height changes as the query narrows the list.
+  }, [position.top, position.left, filtered.length, scrollContainerRef]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
+        keyboardNavRef.current = true;
         setSelectedIndex(prev => (prev + 1) % filtered.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
+        keyboardNavRef.current = true;
         setSelectedIndex(prev => (prev - 1 + filtered.length) % filtered.length);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (filtered[selectedIndex]) {
-          onSelect(filtered[selectedIndex].type);
+          onSelect(filtered[selectedIndex].type, filtered[selectedIndex].columns);
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -110,21 +192,31 @@ export function SlashMenu({ position, query, onSelect, onClose }: Props) {
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [filtered, selectedIndex, onSelect, onClose]);
 
-  return (
+  // Portal to body: position: fixed must not be affected by transformed or
+  // overflow-clipped ancestors inside the page.
+  return createPortal(
     <>
       <div className="slash-menu-overlay" onClick={onClose} />
       <div
+        ref={menuRef}
         className="slash-menu"
-        style={{ top: position.top + 20, left: position.left }}
+        style={{
+          top: placement?.top ?? 0,
+          left: placement?.left ?? 0,
+          maxHeight: placement?.maxHeight,
+          // Hidden for the single layout pass before we know where to put it.
+          visibility: placement ? 'visible' : 'hidden',
+        }}
       >
         {filtered.length === 0 ? (
           <div className="slash-menu-empty">{t('slash.empty')}</div>
         ) : (
           filtered.map((item, idx) => (
             <div
-              key={item.type}
+              key={`${item.type}-${item.columns ?? ''}`}
+              ref={idx === selectedIndex ? activeItemRef : undefined}
               className={`slash-menu-item ${idx === selectedIndex ? 'active' : ''}`}
-              onClick={() => onSelect(item.type)}
+              onClick={() => onSelect(item.type, item.columns)}
               onMouseEnter={() => setSelectedIndex(idx)}
             >
               <div className="slash-menu-item-icon">
@@ -138,6 +230,7 @@ export function SlashMenu({ position, query, onSelect, onClose }: Props) {
           ))
         )}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Parasti">
+  <!--
+    Parasti logo-mark, color variant for light backgrounds.
+    Geometry traced from the approved mockup (see logo-mark.svg notes):
+    wider body, V-notch + hanging wedge tail at the bottom right.
+    Use in README, OG image, and other surfaces where the background is light.
+    For dark backgrounds use logo-mark.svg (currentColor) in cream/white context.
+  -->
+  <path d="M19.6 1H44.4A7.4 7.4 0 0 1 51.9 8.4V50.3Q51.9 52.2 49.9 52.9L48 55.4L42.2 52.9L43.1 55.6L46.2 62.5H19.9A7.8 7.8 0 0 1 12.1 54.7V8.4A7.4 7.4 0 0 1 19.6 1Z"
+        fill="#2B2A26"/>
+  <g stroke-linecap="round" fill="none">
+    <!-- title line (terracotta) -->
+    <path d="M19.5 21H43.5" stroke="#C05A3C" stroke-width="5"/>
+    <!-- body lines (cream) -->
+    <path d="M19.5 28.5H35.5" stroke="#F4EFE6" stroke-width="4"/>
+    <path d="M19.5 35H43.5" stroke="#F4EFE6" stroke-width="4"/>
+    <path d="M19.5 41.5H28.5" stroke="#F4EFE6" stroke-width="4"/>
+  </g>
+</svg>

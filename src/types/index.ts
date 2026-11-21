@@ -6,7 +6,26 @@ export interface Page {
   position: number;
   created_at: string;
   updated_at: string;
+  // Page-level preferences and state, stored in the DB so they follow the user
+  // across devices.
+  is_favorite: boolean;
+  full_width: boolean;
+  is_project: boolean;
+  // Gradient CSS string or image URL; null = no cover.
+  cover: string | null;
+  // Set while the page is in Trash (ISO-like UTC timestamp), otherwise null.
+  deleted_at: string | null;
   children?: Page[];
+}
+
+// A row of the Trash list (GET /pages/trash): only trashed pages whose parent
+// is not trashed, so a restore brings the whole subtree back.
+export interface TrashedPage {
+  id: string;
+  title: string;
+  icon: string;
+  parent_id: string | null;
+  deleted_at: string;
 }
 
 export type BlockType =
@@ -29,7 +48,57 @@ export type BlockType =
   // un bloque normal (paragraph); lo especial es que al crearlo desde el slash
   // menu agregamos un hijo vacío para que el chevron sea visible de entrada.
   | 'toggle'
-  | 'math';
+  | 'math'
+  // content = a web URL. bookmark shows a link card, embed an iframe (providers
+  // in utils/embed.ts).
+  | 'bookmark'
+  | 'embed'
+  // Side-by-side columns. Layout containers with no text of their own, stored as
+  // ordinary rows in the same parent_id tree: a `column_list` (top level, or under
+  // a regular block) has `column` children, and every column holds normal blocks
+  // (nested lists included) that restart at depth 0. A column_list never goes
+  // inside a column, a column never leaves its list, and a list always has two
+  // columns or more (utils/columns.ts keeps that true). Widths are
+  // props.width on each column, a fraction of the row (missing = equal share).
+  // Markdown has no equivalent, so export writes the columns' blocks one after
+  // another.
+  | 'column_list'
+  | 'column';
+
+// Page metadata cached in a bookmark block (props.preview) so the card renders
+// without asking the server again. `url` is the address it was fetched for: a
+// preview whose url differs from the block's content is stale.
+export interface BookmarkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  favicon: string | null;
+  fetchedAt: string;
+}
+
+// Free-form JSON bag stored in blocks.props. Images use width/align/caption,
+// tables headerRow/headerColumn/colWidths, text blocks color, bookmarks preview,
+// embeds width, columns width; later phases will add more keys without touching
+// the schema.
+export interface BlockProps {
+  // Images and embeds: px. Columns: fraction of the row (0..1).
+  width?: number;
+  align?: 'left' | 'center' | 'right';
+  caption?: string;
+  // Table: first row / first column styled as a header (headerRow defaults to
+  // true when missing) and the width in px of each column (missing = auto).
+  headerRow?: boolean;
+  headerColumn?: boolean;
+  colWidths?: number[];
+  // Text blocks: palette name of the text or background color, e.g. "blue" or
+  // "blue_background" (see utils/blockColor.ts). Missing = default.
+  color?: string;
+  // Bookmark: cached page metadata (see BookmarkPreview).
+  preview?: BookmarkPreview;
+  [key: string]: unknown;
+}
 
 export interface Block {
   id: string;
@@ -40,16 +109,29 @@ export interface Block {
   language: string;
   position: number;
   // parent_id: id del bloque padre dentro de la misma página, o null.
-  // Lo usamos para armar el árbol jerárquico del editor (markflare-style).
+  // Lo usamos para armar el árbol jerárquico del editor (parasti-style).
   parent_id: string | null;
   // collapsed: estado del chevron. true = hijos ocultos.
   collapsed: boolean;
+  props: BlockProps;
   created_at: string;
   updated_at: string;
 }
 
 export interface PageWithBlocks extends Page {
   blocks: Block[];
+}
+
+// Calendar event. Times are wall-clock "HH:MM" strings, or null for an
+// all-day event. No timezone info is stored on purpose (single-user app).
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FileInfo {
@@ -62,6 +144,20 @@ export interface FileInfo {
   created_at: string;
 }
 
+// Client-only state of an in-flight (or failed) file upload, keyed by block id
+// in the editor. Never persisted: the block itself only stores the file id once
+// the upload has finished.
+export interface UploadState {
+  status: 'queued' | 'uploading' | 'done' | 'error';
+  // 0..1. 0 while still waiting or compressing, so the UI shows it as indeterminate.
+  progress: number;
+  // blob: URL of the local file for images, so the block shows the picture at once.
+  previewUrl: string | null;
+  fileName: string;
+  fileSize: number;
+  error?: string;
+}
+
 export interface BlockTypeOption {
   type: BlockType;
   // i18n keys — the consumer (SlashMenu / Block) translates with t().
@@ -72,6 +168,8 @@ export interface BlockTypeOption {
   icon: string;
   label: string;
   description: string;
+  // column_list entries: how many columns the command creates.
+  columns?: number;
 }
 
 export const BLOCK_TYPES: BlockTypeOption[] = [
@@ -92,6 +190,11 @@ export const BLOCK_TYPES: BlockTypeOption[] = [
   { type: 'table' as BlockType, labelKey: 'slash.table', descriptionKey: 'slash.tableDesc', icon: 'table', label: 'Table', description: 'Table with rows and columns' },
   { type: 'toggle' as BlockType, labelKey: 'slash.toggle', descriptionKey: 'slash.toggleDesc', icon: 'toggle', label: 'Toggle', description: 'Collapsible block with children' },
   { type: 'math' as BlockType, labelKey: 'slash.math', descriptionKey: 'slash.mathDesc', icon: 'math', label: 'Math equation', description: 'Formula with LaTeX / KaTeX' },
+  { type: 'bookmark' as BlockType, labelKey: 'slash.bookmark', descriptionKey: 'slash.bookmarkDesc', icon: 'bookmark', label: 'Web bookmark', description: 'Save a link as a visual card' },
+  { type: 'embed' as BlockType, labelKey: 'slash.embed', descriptionKey: 'slash.embedDesc', icon: 'embed', label: 'Embed', description: 'Embed a video, map, design or music player' },
+  { type: 'column_list' as BlockType, columns: 2, labelKey: 'slash.columns2', descriptionKey: 'slash.columns2Desc', icon: 'columns', label: '2 columns', description: 'Two side-by-side columns' },
+  { type: 'column_list' as BlockType, columns: 3, labelKey: 'slash.columns3', descriptionKey: 'slash.columns3Desc', icon: 'columns', label: '3 columns', description: 'Three side-by-side columns' },
+  { type: 'column_list' as BlockType, columns: 4, labelKey: 'slash.columns4', descriptionKey: 'slash.columns4Desc', icon: 'columns', label: '4 columns', description: 'Four side-by-side columns' },
 ];
 
 export interface SearchResult {
