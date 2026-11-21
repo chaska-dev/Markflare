@@ -69,6 +69,33 @@ Tag names are always lowercase `v` + the exact `package.json` version. There
 is exactly one tag per release; re-tagging a different commit with the same
 name is forbidden — fix forward with a new PATCH instead.
 
+## The MCP package versions independently
+
+The `mcp/` npm package (`parasti-mcp`) carries its **own** SemVer, unrelated to
+the app version above. App tags and package tags never collide because the tag
+names use different schemes:
+
+| Artifact | Version source | Tag name | Example |
+|---|---|---|---|
+| Parasti app | `package.json` | `vX.Y.Z` | `v1.1.0` |
+| parasti-mcp | `mcp/package.json` | `mcp-vX.Y.Z` | `mcp-v1.0.1` |
+
+SemVer meaning for the package:
+
+- **MAJOR** — a tool is removed or renamed, or an argument/output behavior
+  changes in a way that breaks existing AI-client workflows
+- **MINOR** — a new tool, or an optional argument/output field (additive)
+- **PATCH** — fixes, docs, dependency bumps
+
+A package release is a push of an `mcp-v*` tag:
+[`.github/workflows/publish-mcp.yml`](.github/workflows/publish-mcp.yml)
+verifies the tag matches `mcp/package.json`, builds, smoke-tests the stdio
+handshake, and publishes to npm — no interactive 2FA involved. The re-tagging
+rule above applies per-scheme: once a package version is **successfully
+published**, its tag name is final — fix forward with the next PATCH. (During
+the initial setup of this pipeline, tags were deleted and re-created before any
+successful publish, which is why no published artifact ever changed.)
+
 ## Database migrations are numbered separately
 
 Files in `migrations/` use their own sequential scheme (`0001_initial.sql`,

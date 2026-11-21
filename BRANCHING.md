@@ -79,6 +79,15 @@ git switch dev
 git merge main
 ```
 
+### Exception: the MCP package
+
+The `parasti-mcp` npm package does not ride this cycle. It versions and ships
+independently (see VERSIONING.md, *"The MCP package versions independently"*):
+pushing an `mcp-v*` tag from any branch triggers
+`.github/workflows/publish-mcp.yml`, which builds `mcp/` and publishes straight
+to npm. Keep MCP changes integrated on `dev` as usual — but a package tag can
+be cut whenever the package is ready, without waiting for an app release.
+
 ## Rules worth keeping
 
 1. **`staging` is not a second `dev`.** It only ever receives merges from `dev`.
