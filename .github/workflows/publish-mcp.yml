@@ -1,0 +1,51 @@
+name: Publish MCP package
+
+# Release flow: bump version in mcp/package.json, commit, then
+#   git tag mcp-v1.2.3 && git push origin mcp-v1.2.3
+# Publishes to npm via trusted publishing (OIDC) — no npm token needed.
+
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+
+permissions:
+  id-token: write # required for npm trusted publishing (OIDC)
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false # never use caching in release builds
+
+      - name: Verify tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#mcp-v}"
+          VERSION=$(node -p "require('./mcp/package.json').version")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag mcp-v$TAG does not match mcp/package.json version $VERSION"
+            exit 1
+          fi
+
+      - name: Install and build
+        working-directory: mcp
+        run: |
+          npm install --no-fund --no-audit
+          npm run build
+
+      - name: Smoke test (stdio handshake)
+        working-directory: mcp
+        run: |
+          (printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0.0.0"}}}'; sleep 0.5) \
+            | node dist/index.js | grep -q '"parasti-mcp"'
+
+      - name: Publish to npm
+        working-directory: mcp
+        run: npm publish

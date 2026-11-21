@@ -17,6 +17,7 @@
     "db:migrate:prod": "wrangler d1 migrations apply parasti-db --remote",
     "db:migrate:local": "wrangler d1 migrations apply parasti-db --local",
     "mcp": "tsx mcp/index.ts",
+    "mcp:build": "tsc -p mcp/tsconfig.json",
     "mcp:token": "tsx mcp/generate-token.ts",
     "test:mcp": "tsx mcp/test.ts"
   },
@@ -40,6 +41,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
+    "@types/node": "^26.6.6",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

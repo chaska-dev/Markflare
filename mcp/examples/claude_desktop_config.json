@@ -2,7 +2,7 @@
   "mcpServers": {
     "parasti": {
       "command": "npx",
-      "args": ["-y", "tsx", "path/to/parasti/mcp/index.ts"],
+      "args": ["-y", "parasti-mcp"],
       "env": {
         "PARASTI_URL": "http://localhost:3000",
         "PARASTI_API_TOKEN": "YOUR_API_TOKEN_HERE"

@@ -82,7 +82,7 @@ Add the server definition to your configuration file:
   "mcpServers": {
     "parasti": {
       "command": "npx",
-      "args": ["-y", "tsx", "path/to/parasti/mcp/index.ts"],
+      "args": ["-y", "parasti-mcp"],
       "env": {
         "PARASTI_URL": "http://localhost:3000",
         "PARASTI_API_TOKEN": "YOUR_TOKEN_HERE"
@@ -91,7 +91,7 @@ Add the server definition to your configuration file:
   }
 }
 ```
-*(Note: Replace with your absolute path to `mcp/index.ts`)*.
+*(Running from a fork or a local checkout instead? Use `"args": ["-y", "tsx", "path/to/parasti/mcp/index.ts"]` with your absolute path.)*
 
 ### 2. Cursor IDE
 
@@ -102,7 +102,7 @@ Add to `.cursor/mcp.json` or your Cursor MCP settings:
   "mcpServers": {
     "parasti": {
       "command": "npx",
-      "args": ["-y", "tsx", "mcp/index.ts"],
+      "args": ["-y", "parasti-mcp"],
       "env": {
         "PARASTI_URL": "http://localhost:3000",
         "PARASTI_API_TOKEN": "YOUR_TOKEN_HERE"
@@ -110,6 +110,33 @@ Add to `.cursor/mcp.json` or your Cursor MCP settings:
     }
   }
 }
+```
+*(Running from source: `"args": ["-y", "tsx", "mcp/index.ts"]` from the repository root.)*
+
+---
+
+## Development & Release
+
+The npm package is built straight from `mcp/index.ts` — that file is the single
+source of truth; nothing is duplicated.
+
+Releases are automated through npm **trusted publishing (OIDC)** — see
+[`.github/workflows/publish-mcp.yml`](../.github/workflows/publish-mcp.yml):
+
+```bash
+# bump the version in mcp/package.json first, then:
+git tag mcp-v1.2.3
+git push origin mcp-v1.2.3
+```
+
+The workflow verifies the tag matches the package version, compiles
+`mcp/dist/index.js`, smoke-tests the stdio handshake, and publishes to npm —
+no npm token and no interactive 2FA involved.
+
+Local build, when you need one:
+
+```bash
+pnpm run mcp:build        # compile mcp/index.ts -> mcp/dist/index.js
 ```
 
 ---
